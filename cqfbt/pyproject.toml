@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "cqfbt"
+version = "0.1.0"
+description = ""
+authors = ["Jack Young <59127086+JackRYoung@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
