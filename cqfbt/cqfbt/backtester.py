@@ -64,6 +64,10 @@ class engine:
     def add_data(self, path):
         pass
 
+    # Sets capital to desired amount
+    def set_capital(capital):
+        engine.capital = capital
+
     # Adds strategy to list of strategies
     # Callable by user
     def add_strategy(self, strategy):
@@ -132,6 +136,11 @@ class engine:
     # Plots history of portfolio value, summing assets and capital
     def plot_history():
         print("\n ------------ Plotting History ------------ \n\n")
+
+    # Uses data to price the cash value of a portfolio by summing bid prices
+    # for each asset in the portfolio, capital should be included.
+    def get_portfolio_cash_value(data):
+        pass
 
 
 class InsufficientFundsException(Exception):
