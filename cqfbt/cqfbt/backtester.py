@@ -12,7 +12,7 @@ class engine:
     counter = 0
     dates = []
     portfolio = []
-    portfolio_values = []
+    portfolio_allocations = []
     portfolio_history = []
     capital = 0
     orders = None
@@ -25,7 +25,7 @@ class engine:
     def __init__(self, ptfl=[], start_date='', end_date='', interval='', init_capital=5e4):
         self.capital = init_capital
         self.portfolio = ptfl
-        self.portfolio_values = np.zeros(len(ptfl))
+        self.portfolio_allocations = np.zeros(len(ptfl))
         engine.get_info_on_stock(ptfl, start_date, end_date, interval)
 
         # for now, we are restrained in the sense that all assets must
@@ -48,7 +48,7 @@ class engine:
                 self.arr_length = len(self.dates)
             idx += 1
         self.portfolio_history = np.zeros(
-            (self.arr_length, len(self.portfolio)+1))
+            (self.arr_length, len(self.portfolio)+2))
 
     # Gets yf data on stocks in optional portfolio argument
     # Saves csv files in data folder
@@ -87,7 +87,7 @@ class engine:
     def update_portfolio(self, portfolio_delta, capital_delta):
         self.capital += capital_delta
         for i in range(0, len(self.portfolio)-1):
-            self.portfolio_values[i] += portfolio_delta[i]
+            self.portfolio_allocations[i] += portfolio_delta[i]
 
     # TODO: Executes orders at prices found in the data, and returns change in
     #   portfolio and capital as a result. Returns any orders which did not execute
@@ -111,16 +111,18 @@ class engine:
     def run(self):
         error = False
         for i in range(0, self.arr_length-1):
-            for j in range(0, len(self.portfolio_values-1)):
-                self.portfolio_history[i, j] = self.portfolio_values[j]
+            for j in range(0, len(self.portfolio_allocations-1)):
+                self.portfolio_history[i, j] = self.portfolio_allocations[j]
             self.portfolio_history[i, len(
-                self.portfolio_values)] = self.capital
+                self.portfolio_allocations)] = self.capital
             date, data = self.next_data(error)
+            self.portfolio_history[i, len(
+                self.portfolio_allocations)+1] = self.get_portfolio_cash_value(data)
             print(str(i) + ' ' + date + ' ::: ' +
                   list_to_str(self.portfolio_history[i, :]))
             # for now supports one strategy   V
             self.orders = self.strategies[0].execute(
-                date, data, self.portfolio_values, self.capital, self.orders, error)
+                date, data, self.portfolio_allocations, self.capital, self.orders, error)
             error = False
             # Add logging of transactions for 0.0.2
             try:
@@ -140,7 +142,7 @@ class engine:
     # Uses data to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included.
     def get_portfolio_cash_value(self, data):
-        pass
+        return 0
 
 
 class InsufficientFundsException(Exception):
