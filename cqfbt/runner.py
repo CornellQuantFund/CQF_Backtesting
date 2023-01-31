@@ -17,6 +17,7 @@ if __name__ == "__main__":
 
     # Testing optional arguments for multiple constructors
     eng0 = backtester.engine()
+    eng0.set_capital(8e4)
     eng0.add_data('data1.csv')
     eng0.add_data('data2.csv')
     eng0.add_strategy(s0)

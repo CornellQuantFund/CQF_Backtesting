@@ -23,9 +23,9 @@ class engine:
     # Initializes sizes of vectors, csv files, etc, this function is kind of
     # fragile right now
     def __init__(self, ptfl=[], start_date='', end_date='', interval='', init_capital=5e4):
-        engine.capital = init_capital
-        engine.portfolio = ptfl
-        engine.portfolio_values = np.zeros(len(ptfl))
+        self.capital = init_capital
+        self.portfolio = ptfl
+        self.portfolio_values = np.zeros(len(ptfl))
         engine.get_info_on_stock(ptfl, start_date, end_date, interval)
 
         # for now, we are restrained in the sense that all assets must
@@ -34,21 +34,21 @@ class engine:
         # portfolio while regular stocks are, I will work on this for version 0.0.2
         if len(ptfl) != 0:
             length = len(pd.read_csv("cqfbt\\data\\"+ptfl[0]+"_hist.csv"))
-            engine.arr_length = length
-            engine.arr = np.ndarray((len(ptfl), engine.arr_length, 7))
+            self.arr_length = length
+            self.arr = np.ndarray((len(ptfl), self.arr_length, 7))
 
         idx = 0
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             df = pd.read_csv("cqfbt\\data\\"+f"{ticker}_hist.csv")
-            engine.arr[idx, :, :] = df.loc[0:engine.arr_length,
-                                           'Open':'Stock Splits'].to_numpy()
+            self.arr[idx, :, :] = df.loc[0:self.arr_length,
+                                         'Open':'Stock Splits'].to_numpy()
             if idx == 0:
-                engine.dates = df.Date.to_list()
-                engine.arr_length = len(engine.dates)
+                self.dates = df.Date.to_list()
+                self.arr_length = len(self.dates)
             idx += 1
-        engine.portfolio_history = np.zeros(
-            (engine.arr_length, len(engine.portfolio)+1))
+        self.portfolio_history = np.zeros(
+            (self.arr_length, len(self.portfolio)+1))
 
     # Gets yf data on stocks in optional portfolio argument
     # Saves csv files in data folder
@@ -65,34 +65,34 @@ class engine:
         pass
 
     # Sets capital to desired amount
-    def set_capital(capital):
-        engine.capital = capital
+    def set_capital(self, capital):
+        self.capital = capital
 
     # Adds strategy to list of strategies
     # Callable by user
     def add_strategy(self, strategy):
-        engine.strategies.append(strategy)
+        self.strategies.append(strategy)
 
     # Returns the next time-slice of data
     # If an error was thrown due to failure to execute orders,
     # the counter is not updated and the same data is returned.
-    def next_data(error):
+    def next_data(self, error):
         if (error):
-            return engine.dates[engine.counter], engine.arr[:, engine.counter, :]
+            return self.dates[self.counter], self.arr[:, self.counter, :]
         else:
-            engine.counter += 1
-            return engine.dates[engine.counter], engine.arr[:, engine.counter, :]
+            self.counter += 1
+            return self.dates[self.counter], self.arr[:, self.counter, :]
 
     # Updates portfolio and capital according to executed orders
-    def update_portfolio(portfolio_delta, capital_delta):
-        engine.capital += capital_delta
-        for i in range(0, len(engine.portfolio)-1):
-            engine.portfolio_values[i] += portfolio_delta[i]
+    def update_portfolio(self, portfolio_delta, capital_delta):
+        self.capital += capital_delta
+        for i in range(0, len(self.portfolio)-1):
+            self.portfolio_values[i] += portfolio_delta[i]
 
     # TODO: Executes orders at prices found in the data, and returns change in
     #   portfolio and capital as a result. Returns any orders which did not execute
     #   yet due to the limit price.
-    def execute_orders(data):
+    def execute_orders(self, data):
         #   For now, just use one of the open or close values as the 'true price'
         #   at which orders are executed
         # Since we do not have access to live data, we may in the future approximate
@@ -100,9 +100,9 @@ class engine:
         # standard deviation derived from other data
         outstanding_orders = None
         capital_delta = 0
-        portfolio_delta = np.zeros(len(engine.portfolio))
+        portfolio_delta = np.zeros(len(self.portfolio))
 
-        if engine.capital+capital_delta < 0:
+        if self.capital+capital_delta < 0:
             raise InsufficientFundsException()
         return outstanding_orders, portfolio_delta, capital_delta
 
@@ -110,36 +110,36 @@ class engine:
     # returns the results back to the strategy. Repeats for all available data
     def run(self):
         error = False
-        for i in range(0, engine.arr_length-1):
-            for j in range(0, len(engine.portfolio_values-1)):
-                engine.portfolio_history[i, j] = engine.portfolio_values[j]
-            engine.portfolio_history[i, len(
-                engine.portfolio_values)] = engine.capital
-            date, data = engine.next_data(error)
+        for i in range(0, self.arr_length-1):
+            for j in range(0, len(self.portfolio_values-1)):
+                self.portfolio_history[i, j] = self.portfolio_values[j]
+            self.portfolio_history[i, len(
+                self.portfolio_values)] = self.capital
+            date, data = self.next_data(error)
             print(str(i) + ' ' + date + ' ::: ' +
-                  list_to_str(engine.portfolio_history[i, :]))
+                  list_to_str(self.portfolio_history[i, :]))
             # for now supports one strategy   V
-            engine.orders = engine.strategies[0].execute(
-                date, data, engine.portfolio_values, engine.capital, engine.orders, error)
+            self.orders = self.strategies[0].execute(
+                date, data, self.portfolio_values, self.capital, self.orders, error)
             error = False
             # Add logging of transactions for 0.0.2
             try:
-                outstanding_orders, delta_p, delta_c = engine.execute_orders(
+                outstanding_orders, delta_p, delta_c = self.execute_orders(
                     data)
-                engine.update_portfolio(delta_p, delta_c)
-                engine.orders = outstanding_orders
+                self.update_portfolio(delta_p, delta_c)
+                self.orders = outstanding_orders
             except InsufficientFundsException:
                 i -= 1
                 error = True
-        engine.plot_history()
+        self.plot_history()
 
     # Plots history of portfolio value, summing assets and capital
-    def plot_history():
+    def plot_history(self):
         print("\n ------------ Plotting History ------------ \n\n")
 
     # Uses data to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included.
-    def get_portfolio_cash_value(data):
+    def get_portfolio_cash_value(self, data):
         pass
 
 
