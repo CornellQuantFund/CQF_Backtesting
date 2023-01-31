@@ -24,7 +24,7 @@ if __name__ == "__main__":
     eng0.run()
 
     eng = backtester.engine(
-        ['SPY', 'TSLA', 'AAPL', 'AMD', 'AMZN'], '2021-01-01', '2022-01-01', '1d', 100000)
+        ['SPY', 'TSLA', 'AAPL', 'JPM', 'AMZN'], '2021-01-01', '2022-01-01', '1d', 100000)
     eng.add_data('data1.csv')
     eng.add_data('data2.csv')
     eng.add_strategy(s0)

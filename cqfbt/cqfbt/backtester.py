@@ -11,7 +11,7 @@ from math import *
 class engine:
     counter = 0
     dates = []
-    portfolio = []
+    portfolio_assets = []
     portfolio_allocations = []
     portfolio_history = []
     capital = 0
@@ -24,9 +24,9 @@ class engine:
     # fragile right now
     def __init__(self, ptfl=[], start_date='', end_date='', interval='', init_capital=5e4):
         self.capital = init_capital
-        self.portfolio = ptfl
+        self.portfolio_assets = ptfl
         self.portfolio_allocations = np.zeros(len(ptfl))
-        engine.get_info_on_stock(ptfl, start_date, end_date, interval)
+        self.get_info_on_stock(start_date, end_date, interval)
 
         # for now, we are restrained in the sense that all assets must
         # have the exact same length of data
@@ -35,26 +35,28 @@ class engine:
         if len(ptfl) != 0:
             length = len(pd.read_csv("cqfbt\\data\\"+ptfl[0]+"_hist.csv"))
             self.arr_length = length
-            self.arr = np.ndarray((len(ptfl), self.arr_length, 7))
+            self.arr = np.ndarray((self.arr_length, len(ptfl), 7))
 
         idx = 0
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             df = pd.read_csv("cqfbt\\data\\"+f"{ticker}_hist.csv")
-            self.arr[idx, :, :] = df.loc[0:self.arr_length,
-                                         'Open':'Stock Splits'].to_numpy()
+            self.arr[:, i, :] = df.loc[0:self.arr_length,
+                                       'Open':'Stock Splits'].to_numpy()
             if idx == 0:
                 self.dates = df.Date.to_list()
                 self.arr_length = len(self.dates)
-            idx += 1
+            idx = 1
+
         self.portfolio_history = np.zeros(
-            (self.arr_length, len(self.portfolio)+2))
+            (self.arr_length, len(self.portfolio_assets)+2))
 
     # Gets yf data on stocks in optional portfolio argument
     # Saves csv files in data folder
-    def get_info_on_stock(ptfl, start, end, interval):
-        for i in range(0, len(ptfl)):
-            ticker = ptfl[i]
+
+    def get_info_on_stock(self, start, end, interval):
+        for i in range(0, len(self.portfolio_assets)):
+            ticker = self.portfolio_assets[i]
             stock = yf.Ticker(ticker)
             hist = stock.history(start=start, end=end, interval=interval)
             hist.to_csv("cqfbt\\data\\" + f"{ticker}_hist.csv")
@@ -78,15 +80,15 @@ class engine:
     # the counter is not updated and the same data is returned.
     def next_data(self, error):
         if (error):
-            return self.dates[self.counter], self.arr[:, self.counter, :]
+            return self.dates[self.counter], self.arr[self.counter, :, :]
         else:
             self.counter += 1
-            return self.dates[self.counter], self.arr[:, self.counter, :]
+            return self.dates[self.counter], self.arr[self.counter, :, :]
 
     # Updates portfolio and capital according to executed orders
     def update_portfolio(self, portfolio_delta, capital_delta):
         self.capital += capital_delta
-        for i in range(0, len(self.portfolio)-1):
+        for i in range(0, len(self.portfolio_assets)):
             self.portfolio_allocations[i] += portfolio_delta[i]
 
     # TODO: Executes orders at prices found in the data, and returns change in
@@ -100,7 +102,7 @@ class engine:
         # standard deviation derived from other data
         outstanding_orders = None
         capital_delta = 0
-        portfolio_delta = np.zeros(len(self.portfolio))
+        portfolio_delta = np.zeros(len(self.portfolio_assets))
 
         if self.capital+capital_delta < 0:
             raise InsufficientFundsException()
@@ -111,14 +113,18 @@ class engine:
     def run(self):
         error = False
         for i in range(0, self.arr_length-1):
-            for j in range(0, len(self.portfolio_allocations-1)):
-                self.portfolio_history[i, j] = self.portfolio_allocations[j]
-            self.portfolio_history[i, len(
-                self.portfolio_allocations)] = self.capital
             date, data = self.next_data(error)
+            # Portfolio History keeps track of asset allocations
+            for j in range(0, len(self.portfolio_assets)):
+                self.portfolio_history[i, j] = self.portfolio_allocations[j]
+            # And capital
             self.portfolio_history[i, len(
-                self.portfolio_allocations)+1] = self.get_portfolio_cash_value(data)
-            print(str(i) + ' ' + date + ' ::: ' +
+                self.portfolio_assets)] = self.capital
+            # And total portfolio value
+            self.portfolio_history[i, len(
+                self.portfolio_assets)+1] = self.get_portfolio_cash_value(data)
+            # Testing purposes
+            print(str(i) + ' ::: ' + date + ' ::: ' +
                   list_to_str(self.portfolio_history[i, :]))
             # for now supports one strategy   V
             self.orders = self.strategies[0].execute(
@@ -153,6 +159,6 @@ class InsufficientFundsException(Exception):
 # int / float list to string
 def list_to_str(lst):
     out = "["
-    for i in range(0, len(lst)-2):
+    for i in range(0, len(lst)-1):
         out += str(lst[i]) + ', '
     return out + str(lst[len(lst)-1])+']'
