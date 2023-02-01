@@ -36,13 +36,14 @@ class engine:
         if len(ptfl) != 0:
             length = len(pd.read_csv("cqfbt\\data\\"+ptfl[0]+"_hist.csv"))
             self.arr_length = length
-            self.arr = np.zeros((self.arr_length, len(ptfl), 7))
+            # This 7 is hard coding for the structure of the yf data
+            self.arr = np.zeros((self.arr_length, 7, len(ptfl)))
 
         idx = 0
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             df = pd.read_csv("cqfbt\\data\\"+f"{ticker}_hist.csv")
-            self.arr[:, i, :] = df.loc[0:self.arr_length,
+            self.arr[:, :, i] = df.loc[0:self.arr_length,
                                        'Open':'Stock Splits'].to_numpy()
             if idx == 0:
                 self.dates = df.Date.to_list()
@@ -126,7 +127,7 @@ class engine:
                 self.portfolio_assets), 0] = self.capital
             # And total portfolio value
             self.portfolio_history[i, len(
-                self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(data)
+                self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(date)
             # Testing purposes
             print(str(i) + ' ::: ' + date + ' ::: ' +
                   list_to_str(self.portfolio_history[i, :, 0]))
@@ -151,7 +152,7 @@ class engine:
 
     # Uses data to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included.
-    def get_portfolio_cash_value(self, data):
+    def get_portfolio_cash_value(self, date):
         return 0
 
 
