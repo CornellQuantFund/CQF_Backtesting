@@ -47,6 +47,8 @@ class engine:
                                        'Open':'Stock Splits'].to_numpy()
             if idx == 0:
                 self.dates = df.Date.to_list()
+                for i in range(0, len(self.dates)):
+                    self.dates[i] = str_to_dt(self.dates[i])
                 self.arr_length = len(self.dates)
             idx = 1
 
@@ -63,8 +65,8 @@ class engine:
             hist = stock.history(start=start, end=end, interval=interval)
             hist.to_csv("cqfbt\\data\\" + f"{ticker}_hist.csv")
 
-    # Takes in path to csv data and adds it to the data folder,
-    # edits engine.arr, engine.portfolio and engine.dates
+    # TODO: (II) Takes in path to csv data and adds it to the data folder,
+    # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
     def add_data(self, path):
         pass
 
@@ -104,9 +106,9 @@ class engine:
         # Since we do not have access to live data, we may in the future approximate
         # the 'true price' with a gaussian centered between the high and low with a
         # standard deviation derived from other data
-        outstanding_orders = None
+        outstanding_orders = self.orders
         capital_delta = 0
-        portfolio_delta = np.ndarray((len(self.portfolio_assets), 1))
+        portfolio_delta = np.zeros((len(self.portfolio_assets), 1))
 
         if self.capital+capital_delta < 0:
             raise InsufficientFundsException()
@@ -115,45 +117,67 @@ class engine:
     # Main loop, feeds data to strategy, tries to execute specified orders then
     # returns the results back to the strategy. Repeats for all available data
     def run(self):
-        error = False
-        for i in range(0, self.arr_length-1):
-            date, data = self.next_data(error)
-            # Portfolio History keeps track of asset allocations
-            for j in range(0, len(self.portfolio_assets)):
-                self.portfolio_history[i, j,
-                                       0] = self.portfolio_allocations[j, 0]
-            # And capital
-            self.portfolio_history[i, len(
-                self.portfolio_assets), 0] = self.capital
-            # And total portfolio value
-            self.portfolio_history[i, len(
-                self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(date)
-            # Testing purposes
-            print(str(i) + ' ::: ' + date + ' ::: ' +
-                  list_to_str(self.portfolio_history[i, :, 0]))
-            # for now supports only one   V   strategy
-            self.orders = self.strategies[0].execute(
-                date, data, self.portfolio_allocations, self.capital, self.orders, error)
+        if np.shape(self.arr != (0,)):
             error = False
-            # Add logging of transactions for 0.0.2
-            try:
-                outstanding_orders, delta_p, delta_c = self.execute_orders(
-                    data)
-                self.update_portfolio(delta_p, delta_c)
-                self.orders = outstanding_orders
-            except InsufficientFundsException:
-                i -= 1
-                error = True
-        self.plot_history()
+            for strategy in self.strategies:
+                strategy.init_data_shape(self.next_data(True))
+            self.counter = -1
+            for i in range(0, self.arr_length-1):
+                date, data = self.next_data(error)
+                strategy.append_data_history(data)
+                # Portfolio History keeps track of asset allocations
+                for j in range(0, len(self.portfolio_assets)):
+                    self.portfolio_history[i, j,
+                                           0] = self.portfolio_allocations[j, 0]
+                # And capital
+                self.portfolio_history[i, len(
+                    self.portfolio_assets), 0] = self.capital
+                # And total portfolio value
+                self.portfolio_history[i, len(
+                    self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(date)
+                # Testing purposes
+                print(str(i) + ' ::: ' + str(date) + ' ::: ' +
+                      list_to_str(self.portfolio_history[i, :, 0]))
+                # for now supports only one   V   strategy
+                self.orders = self.strategies[0].execute(
+                    date, data, self.portfolio_allocations, self.capital, self.orders, error)
+                error = False
+                # Add logging of transactions for 0.0.2
+                try:
+                    outstanding_orders, delta_p, delta_c = self.execute_orders(
+                        data)
+                    self.update_portfolio(delta_p, delta_c)
+                    self.orders = outstanding_orders
+                except InsufficientFundsException:
+                    i -= 1
+                    error = True
+            self.plot_history()
+        else:
+            print('No data to test.\n')
 
-    # Plots history of portfolio value, summing assets and capital
+    # TODO: Plot history of portfolio value, summing assets and capital
     def plot_history(self):
         print("\n ------------ Plotting History ------------ \n\n")
 
-    # Uses data to price the cash value of a portfolio by summing bid prices
-    # for each asset in the portfolio, capital should be included.
+    # TODO: Uses data to price the cash value of a portfolio by summing bid prices
+    # for each asset in the portfolio, capital should be included. There may be
+    # no data for the given date, if this is the case use the most recent bid
     def get_portfolio_cash_value(self, date):
         return 0
+
+    # Clears all data files in data folder
+    def clear_data(self):
+        for i in range(0, len(self.portfolio_assets)):
+            self.remove_data(self.portfolio_assets[i])
+
+    # Removes a specific data file from data folder
+    # Can specify a ticker, or if it is user-added data, the index
+    # of the asset in the portfolio
+    # TODO: (II) remove user-added data files by name
+    def remove_data(self, ticker='', assetNo=-1):
+        if (assetNo >= 0):
+            ticker = self.portfolio_assets[assetNo]
+        os.remove("cqfbt\\data\\" + f"{ticker}_hist.csv")
 
 
 class InsufficientFundsException(Exception):
@@ -167,3 +191,12 @@ def list_to_str(lst):
     for i in range(0, len(lst)-1):
         out += str(lst[i]) + ', '
     return out + str(lst[len(lst)-1])+']'
+
+# string to datetime
+# TODO (II) add support for UNIX ts and other date formats
+
+
+def str_to_dt(s):
+    date = s.split(' ')[0].split('-')
+    time = s.split(' ')[1].split('-')[0].split(':')
+    return dt.datetime(int(date[0]), int(date[1]), int(date[2]), int(time[0]), int(time[1]), int(time[2]))
