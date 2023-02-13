@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from math import *
+import logging
 
-
-class engine:
+class Engine():
     counter = 0
     dates = []
     portfolio_assets = []
@@ -28,6 +28,8 @@ class engine:
         self.portfolio_assets = ptfl
         self.portfolio_allocations = np.zeros((len(ptfl), 1))
         self.get_info_on_stocks(start_date, end_date, interval)
+        logging.basicConfig(filename='strategy_log.log', filemode='w', format='%(levelname)s - %(message)s',
+                            level=logging.INFO)
 
         # for now, we are restrained in the sense that all assets must
         # have the exact same length of data
@@ -57,7 +59,6 @@ class engine:
 
     # Gets yf data on stocks in optional portfolio argument
     # Saves csv files in data folder
-
     def get_info_on_stocks(self, start, end, interval):
         for i in range(0, len(self.portfolio_assets)):
             ticker = self.portfolio_assets[i]
@@ -97,26 +98,32 @@ class engine:
             self.portfolio_allocations[i, 0] = round(
                 self.portfolio_allocations[i, 0] + portfolio_delta[i, 0], 2)
 
-    # TODO: Executes orders at prices found in the data, and returns change in
+    # TODO: Group 1
+    #   Executes orders at prices found in the data, and returns change in
     #   portfolio and capital as a result. Returns any orders which did not execute
     #   yet due to the limit price.
     def execute_orders(self, data):
-        #   For now, just use one of the open or close values as the 'true price'
-        #   at which orders are executed
-        # Since we do not have access to live data, we may in the future approximate
-        # the 'true price' with a gaussian centered between the high and low with a
-        # standard deviation derived from other data
+        # For now, just use one of the open or close values as the 'true price'
+        # at which orders are executed
         outstanding_orders = self.orders
         capital_delta = 0
         portfolio_delta = np.zeros((len(self.portfolio_assets), 1))
-
+        logging.info("Bought X shares of Y, Sold A shares of B, etc")
+        
         if self.capital+capital_delta < 0:
+            message = "Transaction attempted with insufficient funds: " + str(self.capital) + ' + ' + str(capital_delta) + ' = ' + str(self.capital+capital_delta) + " < 0"
+            logging.warning(message)
             raise InsufficientFundsException()
         return outstanding_orders, portfolio_delta, capital_delta
 
     # Main loop, feeds data to strategy, tries to execute specified orders then
     # returns the results back to the strategy. Repeats for all available data
     def run(self):
+        # If there is insufficient funds to execute a transaction, the engine will 
+        # re-feed the same data and try again with the new logic provided by the
+        # strategy, if the strategy does nothing different the engine will quit 
+        # to avoid an infinite loop
+        num_errors = 0
         if np.shape(self.arr != (0,)):
             error = False
             for strategy in self.strategies:
@@ -135,9 +142,11 @@ class engine:
                 # And total portfolio value
                 self.portfolio_history[i, len(
                     self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(date)
+                
                 # Testing purposes
                 print(str(i) + ' ::: ' + str(date) + ' ::: ' +
                       list_to_str(self.portfolio_history[i, :, 0]))
+                
                 # for now supports only one   V   strategy
                 self.orders = self.strategies[0].execute(
                     date, data, self.portfolio_allocations, self.capital, self.orders, error)
@@ -148,20 +157,27 @@ class engine:
                         data)
                     self.update_portfolio(delta_p, delta_c)
                     self.orders = outstanding_orders
+                    num_errors = 0
                 except InsufficientFundsException:
                     i -= 1
+                    num_errors += 1
+                    if (num_errors >= 2):
+                        raise InsufficientFundsException()
                     error = True
             self.plot_history()
         else:
             print('No data to test.\n')
 
-    # TODO: Plot history of portfolio value, summing assets and capital
+    # TODO: Group 2
+    # Plot history of portfolio value, summing assets and capital with
+    # get_portfolio_cash_value
     def plot_history(self):
         print("\n ------------ Plotting History ------------ \n\n")
 
-    # TODO: Uses data to price the cash value of a portfolio by summing bid prices
+    # TODO: Group 3
+    # Uses data (self.arr) to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included. There may be
-    # no data for the given date, if this is the case use the most recent bid
+    # no data for the given date, if this is the case use the most recent previous bid
     def get_portfolio_cash_value(self, date):
         return 0
 
@@ -194,8 +210,6 @@ def list_to_str(lst):
 
 # string to datetime
 # TODO (II) add support for UNIX ts and other date formats
-
-
 def str_to_dt(s):
     date = s.split(' ')[0].split('-')
     time = s.split(' ')[1].split('-')[0].split(':')
