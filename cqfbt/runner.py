@@ -31,5 +31,6 @@ if __name__ == "__main__":
     eng.add_data('data2.csv')
     eng.add_strategy(s0)
     eng.run()
+    eng.clear_data()
 
     print('... running !\n')

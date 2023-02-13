@@ -1,3 +1,4 @@
 cqfbt\dist
-\__pycache__
-cqfbt\cqfbt\__pycache__
+**\__pycache__\
+cqfbt\data\*
+!cqfbt\data\.githold
