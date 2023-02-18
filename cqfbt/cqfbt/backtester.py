@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from math import *
 import logging
 
-# TODO: Group 1
 # Design a class to represent an order, should be labeled with buy/sell, which 
 # asset is being traded, is it a limit or market order? at what price is 
 # the limit? etc
@@ -17,10 +16,12 @@ class Order():
     buyT_sellF = None
     asset = -1
     limit = -1
-    def __init__(self, type, asset_index, limit):
+    quantity = -1
+    def __init__(self, type, asset_index, limit, quantity):
         self.buyT_sellF = type
         self.asset = asset_index
         self.limit = limit
+        self.quantity = quantity
 
 
 class Engine():
