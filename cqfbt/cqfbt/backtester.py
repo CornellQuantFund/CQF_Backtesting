@@ -64,9 +64,7 @@ class Engine():
             self.arr[:, :, i] = df.loc[0:self.arr_length,
                                        'Open':'Stock Splits'].to_numpy()
             if idx == 0:
-                self.dates = df.Date.to_list()
-                for i in range(0, len(self.dates)):
-                    self.dates[i] = str_to_dt(self.dates[i])
+                self.dates = list(map(str_to_dt, df.Date.to_list()))
                 self.arr_length = len(self.dates)
             idx = 1
 
