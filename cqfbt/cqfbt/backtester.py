@@ -64,9 +64,7 @@ class Engine():
             self.arr[:, :, i] = df.loc[0:self.arr_length,
                                        'Open':'Stock Splits'].to_numpy()
             if idx == 0:
-                self.dates = df.Date.to_list()
-                for i in range(0, len(self.dates)):
-                    self.dates[i] = str_to_dt(self.dates[i])
+                self.dates = list(map(str_to_dt, df.Date.to_list()))
                 self.arr_length = len(self.dates)
             idx = 1
 
@@ -193,8 +191,11 @@ class Engine():
     # Uses data (self.arr) to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included. There may be
     # no data for the given date, if this is the case use the most recent previous bid
-    def get_portfolio_cash_value(self, date):
-        return 0
+    def get_portfolio_cash_value(self, date: dt.datetime) -> float:
+        data_idx = 3 # use close price
+        date_idx = self.dates.index(date)
+        assets_value = np.dot(self.portfolio_allocations[:, 0], self.arr[date_idx][data_idx])
+        return self.capital + assets_value
 
     # Clears all data files in data folder
     def clear_data(self):
@@ -225,7 +226,7 @@ def list_to_str(lst):
 
 # string to datetime
 # TODO (II) add support for UNIX ts and other date formats
-def str_to_dt(s):
+def str_to_dt(s: str) -> dt.datetime:
     date = s.split(' ')[0].split('-')
     time = s.split(' ')[1].split('-')[0].split(':')
     return dt.datetime(int(date[0]), int(date[1]), int(date[2]), int(time[0]), int(time[1]), int(time[2]))
