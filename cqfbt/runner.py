@@ -2,18 +2,51 @@
 from cqfbt import backtester, strategy
 # These imports will not be needed, as the user will have imported
 # the cqfbt package wherin these are contained
+import yfinance as yf
+import numpy as np
+import pandas as pd
 
 if __name__ == "__main__":
 
     # TODO: Group 4
     # write a 
+
     class Strat0(strategy.Strategy):
-        def execute(self, date, data, portfolio_values, capital, orders, error):
+        def execute(self, date, data, portfolio_values, capital, orders, error, tickers):
+            if orders == None:
+                orders = []
+            newOrders =[]
+
+            # print(tickers)
+            # for row in data:
+            #     print(row)
+            # print(portfolio_values)
+            open = data[0]
+            close = data[3]
+            pct_change = (close-open)/open
+            totalMomentum = pct_change.sum()
+            buy_indices = np.where(pct_change > 0)[0]
+            sell_indices = np.where(pct_change < 0)[0]
+            posSize = abs(pct_change)/abs(totalMomentum)
+            orderAmount = capital * posSize / open
+            # print(tickers)
+            # print(pct_change)
+            # print(buy_indices)
+            # print(sell_indices)
+
+            for buy in buy_indices:
+                tick = tickers[buy]
+                newOrders.append(backtester.Order(True , int(buy), close[buy], orderAmount[buy]))
+            
+            for sell in sell_indices:
+                tick = tickers[sell]
+                newOrders.append(backtester.Order(False , int(sell), close[sell], orderAmount[sell]))
+
             # If error == True, it means that the same date and data as last time will be
             # coming in, the capital and portfolio will be unchanged, and the orders
             # coming in will be the same as the orders sent out on the last iteration.
             # If this error is not adressed the engine will stop running
-            return orders
+            return newOrders
 
     s0 = Strat0()
 

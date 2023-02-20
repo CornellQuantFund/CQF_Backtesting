@@ -22,7 +22,9 @@ class Order():
         self.asset = asset_index
         self.limit = limit
         self.quantity = quantity
-
+    
+    def __repr__(self):
+        return "asset index is " + str(self.asset) + " is this a buy " + str(self.buyT_sellF) + " this is quantity " + str(self.quantity)
 
 class Engine():
     counter = 0
@@ -165,11 +167,14 @@ class Engine():
                 
                 # for now supports only one   V   strategy
                 self.orders = self.strategies[0].execute(
-                    date, data, self.portfolio_allocations, self.capital, self.orders, error)
+                    date, data, self.portfolio_allocations, self.capital, self.orders, error, self.portfolio_assets)
                 error = False
                 try:
                     outstanding_orders, delta_p, delta_c = self.execute_orders(
                         data)
+                    # print(outstanding_orders)
+                    # print(delta_c)
+                    # print(delta_p)
                     self.update_portfolio(delta_p, delta_c)
                     self.orders = outstanding_orders
                     num_errors = 0
