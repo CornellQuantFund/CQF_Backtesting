@@ -193,8 +193,8 @@ class Engine():
     def get_portfolio_cash_value(self, date: dt.datetime) -> float:
         data_idx = 3 # use close price
         date_idx = self.dates.index(date)
-        assets_value = np.dot(self.portfolio_allocations[:, 0], self.arr[date_idx][data_idx])
-        return self.capital + assets_value
+        assets_value = np.dot(self.portfolio_allocations[:, 0], self.arr.loc[date_idx].iloc[data_idx])
+        return self.capital + round(assets_value, 2)
 
     # Clears all data files in data folder
     def clear_data(self):
