@@ -21,10 +21,10 @@ if __name__ == "__main__":
             # for row in data:
             #     print(row)
             # print(portfolio_values)
-            open = data[0]
-            close = data[3]
+            open = data.loc['Open'].to_numpy()
+            close = data.loc['Close'].to_numpy()
             pct_change = (close-open)/open
-            totalMomentum = pct_change.sum()
+            totalMomentum = sum(pct_change)
             buy_indices = np.where(pct_change > 0)[0]
             sell_indices = np.where(pct_change < 0)[0]
             posSize = abs(pct_change)/abs(totalMomentum)
@@ -35,11 +35,9 @@ if __name__ == "__main__":
             # print(sell_indices)
 
             for buy in buy_indices:
-                tick = tickers[buy]
                 newOrders.append(backtester.Order(True , int(buy), close[buy], orderAmount[buy]))
             
             for sell in sell_indices:
-                tick = tickers[sell]
                 newOrders.append(backtester.Order(False , int(sell), close[sell], orderAmount[sell]))
 
             # If error == True, it means that the same date and data as last time will be
@@ -51,12 +49,12 @@ if __name__ == "__main__":
     s0 = Strat0()
 
     # Testing optional arguments for multiple constructors
-    eng0 = backtester.Engine()
-    eng0.set_capital(8e4)
-    eng0.add_data('data1.csv')
-    eng0.add_data('data2.csv')
-    eng0.add_strategy(s0)
-    eng0.run()
+    #eng0 = backtester.Engine()
+    #eng0.set_capital(8e4)
+    #eng0.add_data('data1.csv')
+    #eng0.add_data('data2.csv')
+    #eng0.add_strategy(s0)
+    #eng0.run()
 
     eng = backtester.Engine(
         ['SPY', 'TSLA', 'AAPL', 'JPM', 'AMZN'], '2021-01-01', '2022-01-01', '1d', 100000)
