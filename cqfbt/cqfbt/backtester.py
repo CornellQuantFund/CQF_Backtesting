@@ -24,7 +24,7 @@ class Order():
         self.quantity = quantity
     
     def __repr__(self):
-        return "asset index is " + str(self.asset) + " is this a buy " + str(self.buyT_sellF) + " this is quantity " + str(self.quantity)
+        return "asset index is " + str(self.asset) + " is this a buy " + str(self.buyT_sellF) + " with limit " + str(self.limit) + " this is quantity " + str(self.quantity)
 
 class Engine():
     counter = 0
@@ -71,6 +71,8 @@ class Engine():
                     self.dates[i] = str_to_dt(self.dates[i])
                 self.arr_length = len(self.dates)
             idx = 1
+        print("arr is")
+        print(self.arr)
 
         self.portfolio_history = np.ndarray(
             (self.arr_length, len(self.portfolio_assets)+2, 1))
@@ -126,8 +128,13 @@ class Engine():
         outstanding_orders = self.orders
         capital_delta = 0
         portfolio_delta = np.zeros((len(self.portfolio_assets), 1))
-        logging.info("Bought X shares of Y, Sold A shares of B, etc")
+        print("orders to execute")
+        print(outstanding_orders)
+        for order in outstanding_orders:
+            ticker = self.portfolio_assets[order.asset]
+            logging.info("Bought X shares of Y, Sold A shares of B, etc")
         
+        # is this supposed to happen after you've tried all orders?
         if self.capital+capital_delta < 0:
             message = "Transaction attempted with insufficient funds: " + str(self.capital) + ' + ' + str(capital_delta) + ' = ' + str(self.capital+capital_delta) + " < 0"
             logging.warning(message)
