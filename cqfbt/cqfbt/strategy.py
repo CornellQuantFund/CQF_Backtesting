@@ -1,22 +1,19 @@
 import abc
 import numpy as np
+import pandas as pd
 
 # Abstract class for user defined strategy.
 
 
 class Strategy(metaclass=abc.ABCMeta):
-    data_history = [[]]
-    # list of lists, each entry is a list of the form
-    # [date, np_array], where the np array is the data at that date
+    data_history = []
+    # list of dataframes, each entry is the data at specified date date
 
     def __init__(self):
         return
 
-    def init_data_shape(self, data):
-        self.data_history[0] = list(data)
-
     def append_data_history(self, data):
-        self.data_history = self.data_history + list(data)
+        self.data_history.append(data)
 
     @abc.abstractmethod
     def execute(date, data, portfolio_values, capital, orders, error):
