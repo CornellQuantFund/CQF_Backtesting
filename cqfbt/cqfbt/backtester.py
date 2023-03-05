@@ -121,18 +121,51 @@ class Engine():
         outstanding_orders = self.orders
         capital_delta = 0
         portfolio_delta = np.zeros((len(self.portfolio_assets), 1))
-        print("orders to execute")
-        print(outstanding_orders)
+        open_values = data.loc['Open'].to_numpy()
+        new_orders = [] # orders that cannot be executed due to limits
+
         for order in outstanding_orders:
+            # get values
             ticker = self.portfolio_assets[order.asset]
-            logging.info("Bought X shares of Y, Sold A shares of B, etc")
+            quantity = order.quantity
+            is_buy = order.buyT_sellF
+            limit = order.limit
+            true_price = open_values[order.asset]
+
+            print("ticker: " + ticker + "\tquantity: " + str(quantity) + "\tis buy: " + str(is_buy) + "\tlimit: " + str(limit) + "\ttrue price: " + str(true_price))
+
+            # execute if possible
+            if is_buy:
+                if limit == -1 or true_price < limit:
+                    capital_delta -= quantity * true_price
+                    portfolio_delta[order.asset] += quantity
+                    print("Bought " + str(quantity) + " shares of " + ticker)
+                    logging.info("Bought " + str(quantity) + " shares of " + ticker)
+                else:
+                    new_orders.append(order)
+                    print("Did not buy " + ticker + " due to limit price")
+                    logging.info("Did not buy " + ticker + " due to limit price")
+            else:
+                if limit == -1 or true_price > limit:
+                    capital_delta += quantity * true_price
+                    portfolio_delta[order.asset] -= quantity
+                    print("Sold " + str(quantity) + " shares of " + ticker)
+                    logging.info("Sold " + str(quantity) + " shares of " + ticker)
+                else:
+                    new_orders.append(order)
+                    print("Did not sell " + ticker + " due to limit price")
+                    logging.info("Did not sell " + ticker + " due to limit price")
         
+        print("capital delta: ", capital_delta)
+        print("portfolio delta: ", portfolio_delta)
+
         # is this supposed to happen after you've tried all orders?
-        if self.capital+capital_delta < 0:
-            message = "Transaction attempted with insufficient funds: " + str(self.capital) + ' + ' + str(capital_delta) + ' = ' + str(self.capital+capital_delta) + " < 0"
-            logging.warning(message)
-            raise InsufficientFundsException()
-        return outstanding_orders, portfolio_delta, capital_delta
+        # if self.capital+capital_delta < 0:
+        #     message = "Transaction attempted with insufficient funds: " + str(self.capital) + ' + ' + str(capital_delta) + ' = ' + str(self.capital+capital_delta) + " < 0"
+        #     logging.warning(message)
+        #     raise InsufficientFundsException()
+
+        return new_orders, portfolio_delta, 0 # capital_delta
 
     # Main loop, feeds data to strategy, tries to execute specified orders then
     # returns the results back to the strategy. Repeats for all available data
