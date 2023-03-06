@@ -9,22 +9,26 @@ import matplotlib.pyplot as plt
 from math import *
 import logging
 
-# Design a class to represent an order, should be labeled with buy/sell, which 
-# asset is being traded, is it a limit or market order? at what price is 
+# Design a class to represent an order, should be labeled with buy/sell, which
+# asset is being traded, is it a limit or market order? at what price is
 # the limit? etc
+
+
 class Order():
     buyT_sellF = None
     asset = -1
     limit = -1
     quantity = -1
+
     def __init__(self, type, asset_index, limit, quantity):
         self.buyT_sellF = type
         self.asset = asset_index
         self.limit = limit
         self.quantity = quantity
-    
+
     def __repr__(self):
         return "asset index is " + str(self.asset) + " is this a buy " + str(self.buyT_sellF) + " this is quantity " + str(self.quantity)
+
 
 class Engine():
     counter = -1
@@ -63,7 +67,6 @@ class Engine():
                 self.dates = list(map(str_to_dt, self.arr[i].Date.to_list()))
                 self.arr_length = len(self.dates)
             idx = 1
-        
 
         self.portfolio_history = np.ndarray(
             (self.arr_length, len(self.portfolio_assets)+2, 1))
@@ -97,10 +100,11 @@ class Engine():
     # the counter is not updated and the same data is returned.
     def next_data(self, error):
         if (~error):
-            self.counter+=1
+            self.counter += 1
         data = self.arr[0].iloc[self.counter].to_frame()
         for i in range(1, len(self.portfolio_assets)):
-            data = pd.concat([data, self.arr[i].iloc[self.counter].to_frame()], axis=1)
+            data = pd.concat(
+                [data, self.arr[i].iloc[self.counter].to_frame()], axis=1)
         return self.dates[self.counter], data
 
     # Updates portfolio and capital according to executed orders
@@ -121,9 +125,11 @@ class Engine():
         capital_delta = 0
         portfolio_delta = np.zeros((len(self.portfolio_assets), 1))
         logging.info("Bought X shares of Y, Sold A shares of B, etc")
-        
+
         if self.capital+capital_delta < 0:
-            message = "Transaction attempted with insufficient funds: " + str(self.capital) + ' + ' + str(capital_delta) + ' = ' + str(self.capital+capital_delta) + " < 0"
+            message = "Transaction attempted with insufficient funds: " + \
+                str(self.capital) + ' + ' + str(capital_delta) + \
+                ' = ' + str(self.capital+capital_delta) + " < 0"
             logging.warning(message)
             raise InsufficientFundsException()
         return outstanding_orders, portfolio_delta, capital_delta
@@ -131,9 +137,9 @@ class Engine():
     # Main loop, feeds data to strategy, tries to execute specified orders then
     # returns the results back to the strategy. Repeats for all available data
     def run(self):
-        # If there is insufficient funds to execute a transaction, the engine will 
+        # If there is insufficient funds to execute a transaction, the engine will
         # re-feed the same data and try again with the new logic provided by the
-        # strategy, if the strategy does nothing different the engine will quit 
+        # strategy, if the strategy does nothing different the engine will quit
         # to avoid an infinite loop
         num_errors = 0
         if self.arr != []:
@@ -150,13 +156,13 @@ class Engine():
                     self.portfolio_history[i, len(
                         self.portfolio_assets), 0] = self.capital
                     # And total portfolio value
-                    #self.portfolio_history[i, len(
+                    # self.portfolio_history[i, len(
                     #    self.portfolio_assets)+1, 0] = self.get_portfolio_cash_value(date)
-                
+
                     # Testing purposes
                     print(str(i) + ' ::: ' + str(date) + ' ::: ' +
                           list_to_str(self.portfolio_history[i, :, 0]))
-                
+
                     # for now supports only one   V   strategy
                     self.orders = self.strategies[0].execute(
                         date, data, self.portfolio_allocations, self.capital, self.orders, error, self.portfolio_assets)
@@ -183,17 +189,24 @@ class Engine():
     # TODO: Group 2
     # Plot history of portfolio value, summing assets and capital with
     # get_portfolio_cash_value
-    def plot_history(self):
-        print("\n ------------ Plotting History ------------ \n\n")
+    def plot_history(self) -> None:
+        dates = self.dates
+        values = [self.get_portfolio_cash_value(date) for date in dates]
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.set_title("Portfolio History")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Value")
+        ax.plot(dates, values)
 
     # TODO: Group 3
     # Uses data (self.arr) to price the cash value of a portfolio by summing bid prices
     # for each asset in the portfolio, capital should be included. There may be
     # no data for the given date, if this is the case use the most recent previous bid
     def get_portfolio_cash_value(self, date: dt.datetime) -> float:
-        data_idx = 3 # use close price
+        data_idx = 3  # use close price
         date_idx = self.dates.index(date)
-        assets_value = np.dot(self.portfolio_allocations[:, 0], self.arr.loc[date_idx].iloc[data_idx])
+        assets_value = np.dot(
+            self.portfolio_allocations[:, 0], self.arr.loc[date_idx].iloc[data_idx])
         return self.capital + round(assets_value, 2)
 
     # Clears all data files in data folder
@@ -225,6 +238,8 @@ def list_to_str(lst):
 
 # string to datetime
 # TODO (II) add support for UNIX ts and other date formats
+
+
 def str_to_dt(s: str) -> dt.datetime:
     date = s.split(' ')[0].split('-')
     time = s.split(' ')[1].split('-')[0].split(':')
