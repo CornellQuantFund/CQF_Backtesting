@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # write a 
 
     class Strat0(strategy.Strategy):
-        def execute(self, date, data, portfolio_values, capital, orders, error, tickers):
+        def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
             if orders == None:
                 orders = []
             newOrders =[]
@@ -20,25 +20,42 @@ if __name__ == "__main__":
             # print(tickers)
             # for row in data:
             #     print(row)
-            # print(portfolio_values)
+            # print(portfolio_allocations)
             open = data.loc['Open'].to_numpy()
             close = data.loc['Close'].to_numpy()
             pct_change = (close-open)/open
-            totalMomentum = sum(pct_change)
-            buy_indices = np.where(pct_change > 0)[0]
-            sell_indices = np.where(pct_change < 0)[0]
-            posSize = abs(pct_change)/abs(totalMomentum)
-            orderAmount = capital * posSize / open
+            totalMomentum = sum(pct_change)/len(pct_change)
+
+            buy_indices = []
+            buy_quantities = []
+            sell_indices = []
+            sell_quantities = []
+            for i in range(len(pct_change)):
+                if pct_change[i] > 0.01:
+                    buy_indices.append(i)
+                    buy_quantities.append(round(pct_change[i]/abs(totalMomentum)))
+                elif pct_change[i] < 0 and portfolio_allocations[i] > 0:
+                    sell_indices.append(i)
+                    sell_quantities.append(round(5*pct_change[i]/abs(totalMomentum)))
+            #buy_indices = np.where(pct_change > 0)[0]
+            #sell_indices = np.where(pct_change < -0.02)[0]
+            #posSize = abs(pct_change)/abs(totalMomentum)
+            #orderAmount = capital * posSize / open
+
+            for i in range(len(buy_indices)):
+                newOrders.append(backtester.Order(True, buy_indices[i], buy_quantities[i]))
+            for i in range(len(sell_indices)):
+                newOrders.append(backtester.Order(False, sell_indices[i], sell_quantities[i]))
             # print(tickers)
             # print(pct_change)
             # print(buy_indices)
             # print(sell_indices)
 
-            for buy in buy_indices:
-                newOrders.append(backtester.Order(True , int(buy), close[buy], orderAmount[buy]))
+            #for buy in buy_indices:
+            #    newOrders.append(backtester.Order(True , int(buy), close[buy], orderAmount[buy]))
             
-            for sell in sell_indices:
-                newOrders.append(backtester.Order(False , int(sell), close[sell], orderAmount[sell]))
+            #for sell in sell_indices:
+            #    newOrders.append(backtester.Order(False , int(sell), close[sell], orderAmount[sell]))
 
             # If error == True, it means that the same date and data as last time will be
             # coming in, the capital and portfolio will be unchanged, and the orders
@@ -57,7 +74,7 @@ if __name__ == "__main__":
     #eng0.run()
 
     eng = backtester.Engine(
-        ['SPY', 'TSLA', 'AAPL', 'JPM', 'AMZN'], '2021-01-01', '2022-01-01', '1d', 100000)
+        ['SPY', 'TSLA', 'AAPL', 'JPM', 'AMZN'], '2021-01-01', '2022-01-01', '1d', 350000)
     eng.add_data('data1.csv')
     eng.add_data('data2.csv')
     eng.add_strategy(s0)
