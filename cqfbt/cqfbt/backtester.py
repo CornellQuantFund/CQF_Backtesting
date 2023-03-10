@@ -128,7 +128,8 @@ class Engine():
             if(order.buyT_sellF):
                 portfolio_delta[order.asset] += order.quantity
                 capital_delta -= order.quantity * data.loc['Close'].iloc[order.asset]
-            elif(order.buyT_sellF):
+
+            elif(~order.buyT_sellF):
                 portfolio_delta[order.asset] -= order.quantity
                 capital_delta += order.quantity * data.loc['Close'].iloc[order.asset]
             executed_orders.append(order)
@@ -195,7 +196,6 @@ class Engine():
         else:
             print('No data to test.\n')
 
-    # TODO: Group 2
     # Plot history of portfolio value, summing assets and capital with
     # get_portfolio_cash_value
     def plot_history(self) -> None:
@@ -208,7 +208,7 @@ class Engine():
         ax.plot(dates, values)
         fig.savefig("Performance.pdf")
 
-    # TODO: Group 3
+
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
     # no data for the given date, if this is the case use the most recent previous bid

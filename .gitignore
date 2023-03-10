@@ -4,3 +4,4 @@ cqfbt\cqfbt\__pycache__\
 cqfbt\data\*
 !cqfbt\data\.githold
 **/*.log
+Performance.pdf

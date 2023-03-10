@@ -8,9 +8,6 @@ import pandas as pd
 
 if __name__ == "__main__":
 
-    # TODO: Group 4
-    # write a 
-
     class Strat0(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
             if orders == None:
@@ -24,7 +21,9 @@ if __name__ == "__main__":
             open = data.loc['Open'].to_numpy()
             close = data.loc['Close'].to_numpy()
             pct_change = (close-open)/open
-            totalMomentum = sum(pct_change)/len(pct_change)
+            totalMomentum = round(sum(pct_change)/len(pct_change), 1)
+            if totalMomentum == 0:
+                totalMomentum = -0.1
 
             buy_indices = []
             buy_quantities = []
@@ -33,11 +32,10 @@ if __name__ == "__main__":
             for i in range(len(pct_change)):
                 if pct_change[i] > 0.01:
                     buy_indices.append(i)
-                    buy_quantities.append(round(pct_change[i]/abs(totalMomentum)))
-                elif pct_change[i] < 0 and portfolio_allocations[i] > 0:
+                    buy_quantities.append(round(100*pct_change[i]))
+                elif pct_change[i] < 0 and portfolio_allocations[i] > 9:
                     sell_indices.append(i)
-                    sell_quantities.append(round(5*pct_change[i]/abs(totalMomentum)))
-            #buy_indices = np.where(pct_change > 0)[0]
+                    sell_quantities.append(round(10*pct_change[i]))
             #sell_indices = np.where(pct_change < -0.02)[0]
             #posSize = abs(pct_change)/abs(totalMomentum)
             #orderAmount = capital * posSize / open
