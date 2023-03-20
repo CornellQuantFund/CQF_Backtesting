@@ -62,7 +62,21 @@ class Engine():
         idx = 0
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
-            self.arr.append(pd.read_csv("cqfbt\\data\\"+f"{ticker}_hist.csv"))
+            data = pd.read_csv("cqfbt\\data\\"+f"{ticker}_hist.csv")
+            year = data['Date'][0].split("-")[0]
+            timestamp_range = pd.date_range(
+                start=year+"-01-01", end=year+"-12-31", tz="US/Eastern").tolist()
+            timestamp_range = [str(i) for i in timestamp_range]
+            data = data.set_index("Date")
+            newData = pd.DataFrame().reindex_like(data)
+            newData = newData.reindex(timestamp_range)
+
+            for ind, row in data.iterrows():
+                newData.loc[ind] = row
+            newData = newData.fillna(0.0)
+            newData = newData.reset_index()
+            newData['Date'] = newData['Date'].astype("str")
+            self.arr.append(newData)
             if idx == 0:
                 self.dates = list(map(str_to_dt, self.arr[i].Date.to_list()))
                 self.arr_length = len(self.dates)
@@ -110,7 +124,8 @@ class Engine():
     # Updates portfolio and capital according to executed orders
     def update_portfolio(self, portfolio_delta, capital_delta):
         self.capital = round(self.capital + capital_delta, 2)
-        self.portfolio_allocations = np.add(self.portfolio_allocations, portfolio_delta)
+        self.portfolio_allocations = np.add(
+            self.portfolio_allocations, portfolio_delta)
 
     # TODO: Group 1
     #   Executes orders at prices found in the data, and returns change in
@@ -127,11 +142,13 @@ class Engine():
         for order in outstanding_orders:
             if(order.buyT_sellF):
                 portfolio_delta[order.asset] += order.quantity
-                capital_delta -= order.quantity * data.loc['Close'].iloc[order.asset]
+                capital_delta -= order.quantity * \
+                    data.loc['Close'].iloc[order.asset]
 
             elif(~order.buyT_sellF):
                 portfolio_delta[order.asset] -= order.quantity
-                capital_delta += order.quantity * data.loc['Close'].iloc[order.asset]
+                capital_delta += order.quantity * \
+                    data.loc['Close'].iloc[order.asset]
             executed_orders.append(order)
 
         for order in executed_orders:
@@ -161,17 +178,18 @@ class Engine():
                     strategy.append_data_history(data)
                     # Portfolio History keeps track of asset allocations
                     for j in range(0, len(self.portfolio_assets)):
-                        self.portfolio_history[i, j] = self.portfolio_allocations[j]
+                        self.portfolio_history[i,
+                                               j] = self.portfolio_allocations[j]
                     # And capital
                     self.portfolio_history[i, len(
                         self.portfolio_assets)] = self.capital
                     # And total portfolio value
                     self.portfolio_history[i, len(
-                       self.portfolio_assets)+1] = self.get_portfolio_cash_value(date)
+                        self.portfolio_assets)+1] = self.get_portfolio_cash_value(date)
 
                     # Testing purposes
-                    print(str(i) + ' ::: ' + str(date) + ' ::: ' +
-                          list_to_str(self.portfolio_history[i, :, 0]))
+                    # print(str(i) + ' ::: ' + str(date) + ' ::: ' +
+                    #       list_to_str(self.portfolio_history[i, :, 0]))
 
                     # for now supports only one   V   strategy
                     self.orders = self.strategies[0].execute(
@@ -200,7 +218,8 @@ class Engine():
     # get_portfolio_cash_value
     def plot_history(self) -> None:
         dates = self.dates
-        values = np.add(self.portfolio_history[:, len(self.portfolio_assets)+1], self.portfolio_history[:, len(self.portfolio_assets)])
+        values = np.add(self.portfolio_history[:, len(
+            self.portfolio_assets)+1], self.portfolio_history[:, len(self.portfolio_assets)])
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.set_title("Portfolio History")
         ax.set_xlabel("Date")
@@ -208,16 +227,17 @@ class Engine():
         ax.plot(dates, values)
         fig.savefig("Performance.pdf")
 
-
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
     # no data for the given date, if this is the case use the most recent previous bid
+
     def get_portfolio_cash_value(self, date: dt.datetime) -> float:
         data_idx = 3  # use close price
         date_idx = self.dates.index(date)
         asset_values = 0
         for i in range(len(self.portfolio_allocations)):
-            asset_values += float(self.portfolio_allocations[i]*self.arr[i].loc[date_idx].iloc[data_idx])
+            asset_values += float(
+                self.portfolio_allocations[i]*self.arr[i].loc[date_idx].iloc[data_idx])
         return round(asset_values, 2)
 
     # Clears all data files in data folder
