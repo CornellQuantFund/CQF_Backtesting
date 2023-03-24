@@ -30,7 +30,7 @@ if __name__ == "__main__":
                         else:
                             buy_quantities.append(round(quantity))
                     elif pct_change[i] < -0.01:
-                        quantity = 200000 / (close[i])*pct_change[i]
+                        quantity = 1000000 / (close[i])*pct_change[i]
                         sell_indices.append(i)
                         if (portfolio_allocations[i] <= -0.5*quantity):
                             sell_quantities.append(portfolio_allocations[i])
@@ -77,11 +77,11 @@ if __name__ == "__main__":
                     newOrders.append(backtester.Order(False, sell_indices[i], sell_quantities[i]))
             return newOrders
 
-    s0 = Strat0()
-    s1= Strat1()
+    s0 = Strat0('Momentum Trader')
+    s1= Strat1('Nervous Momentum Trader')
 
     
-    start = '2020-01-01'
+    start = '2021-01-01'
     end = '2023-01-01'
     intvl = '1d'
     yf.Ticker("NFLX").history(start=start, end=end, interval=intvl).to_csv("netflix.csv")
@@ -96,16 +96,14 @@ if __name__ == "__main__":
     eng.add_data('amazon.csv')
     eng.add_data('bitcoin.csv')
     eng.add_data('ethereum.csv')
-    eng.add_strategy(s0, 200000)
-    eng.add_strategy(s1, 200000)
+    eng.add_strategy(s0, 1000000)
+    eng.add_strategy(s1, 1000000)
     eng.run()
 
     eng.clear_data()
 
-    os.remove("data4.csv")
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")
     os.remove("amazon.csv")
     os.remove("netflix.csv")
 
-    print('... done.\n')

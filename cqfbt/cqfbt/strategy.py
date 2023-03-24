@@ -8,9 +8,14 @@ import pandas as pd
 class Strategy(metaclass=abc.ABCMeta):
     data_history = []
     # list of dataframes, each entry is the data at specified date date
+    name = ''
 
-    def __init__(self):
+    def __init__(self, name=''):
+        self.name = name
         return
+
+    def get_name(self):
+        return self.name
 
     def append_data_history(self, data):
         self.data_history.append(data)

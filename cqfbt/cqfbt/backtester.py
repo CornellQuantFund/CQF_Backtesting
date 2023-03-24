@@ -1,4 +1,4 @@
-# CQF Backtester 0.0.1
+# CQF Backtester 0.0.2
 
 import yfinance as yf
 import datetime as dt
@@ -215,12 +215,18 @@ class Engine():
         # re-feed the same data and try again with the new logic provided by the
         # strategy, if the strategy does nothing different the engine will quit
         # to avoid an infinite loop
+        print("Setting up run for:")
         print(self.portfolio_assets)
         self.setup_run()
 
         num_errors = 0
         error = False
+        print("Running:")
+        printer=1
         for i in range(0, len(self.data_arr)):
+            if((i+1) % round(len(self.data_arr)/8) == 0):
+                print(str(printer*12.5) + '%')
+                printer+=1
             for j in range(len(self.strategies)):
                 date, data = self.data_at_idx(i)
                 self.strategies[j].append_data_history(data)
@@ -267,11 +273,11 @@ class Engine():
                 self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
 
                 
-            font = {'family' : 'Adobe Naskh',
-            'weight' : 'bold',
-            'size'   : '20'}
+            font = {'family' : 'Times New Roman',
+                    'weight' : 'bold',
+                    'size'   : '18'}
             fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
-            ax.set_title("Portfolio History", font=font)
+            ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
             ax.set_xlabel("Date")
             ax.set_ylabel("Value")
             ax.plot(dates, values)
@@ -327,3 +333,4 @@ def list_to_str(lst):
 # TODO (II) add support for UNIX ts and other date formats
 def str_to_dt(s: str) -> dt.datetime:
     return dateutil.parser.parse(s)
+
