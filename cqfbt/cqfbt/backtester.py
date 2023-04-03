@@ -1,12 +1,13 @@
 # CQF Backtester 0.0.2
 
+import time
 import yfinance as yf
 import datetime as dt
 import os
 import dateutil.parser
 import datetime as dt
 import numpy as np
-import pandas as pd
+import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
 from math import *
@@ -34,7 +35,6 @@ class Order():
 
 
 class Engine():
-    counter = 0 # Keeps track of where in the time series data we are
     dates = [] # List of datetime objects, from start date to end date separated by interval
     interval = '' # String representing time between data points "1d", "1w", "2h", etc.
     portfolio_assets = [] # List of strings representing the tickers or data filenames we are testing on
@@ -48,16 +48,29 @@ class Engine():
     arr_length = 0 # 
     strategies = [] # List of strategy objects, each acting independently
 
+    init_time_start =0
+    init_time_end =0
+
+    setup_time_start=0
+    setup_time_end =0
+
+    runtime_start =0
+    runtime_end =0
+
     # Initializes sizes of vectors, csv files, etc.
     def __init__(self, ptfl=[], start_date='', end_date='', interval=''):
+        print("Initializing engine:")
+        self.init_time_start = time.time()
         self.interval = interval
         self.get_info_on_stocks(start_date, end_date, ptfl)
         logging.basicConfig(filename='backtesting_log.log', filemode='w', format='%(levelname)s - %(message)s',
                             level=logging.INFO)
-        self.dates = pd.date_range(start=start_date, end=end_date, freq=str.upper(interval))
+        self.dates = pl.date_range(low=str_to_dt(start_date), high=str_to_dt(end_date), interval=str.lower(interval))
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             self.add_data("cqfbt\\data\\"+f"{ticker}_hist.csv")
+        self.init_time_end = time.time()
+        print("Initialization time: " + str(self.init_time_end-self.init_time_start)+"s")
 
 
     # Gets yf data on stocks in optional portfolio argument
@@ -72,21 +85,15 @@ class Engine():
         print("adding " + path)
         path_context = path.split('\\')
         self.portfolio_assets.append(path_context[len(path_context)-1].split('.')[0])
-        data = pd.read_csv(path)
-        for i in range(len(data)):
-            data.at[i, 'Date'] = str_to_dt(data.at[i, 'Date']).replace(tzinfo=dt.timezone.utc)
-        timestamp_range = pd.date_range(
-            start=data['Date'][0], end=data['Date'][data.shape[0]-1], freq=str.upper(self.interval), tz=dt.timezone.utc).tolist()
-        newData = pd.DataFrame().reindex_like(data)
-        newData = newData.reindex(np.linspace(0, len(timestamp_range)-1, len(timestamp_range), dtype=int))
-        didx = 0
-        for i in range(len(timestamp_range)):
-            newData.at[i, 'Date'] = timestamp_range[i]
+        data = pl.read_csv(path)
+        
+        data.replace('Date', data.get_column('Date').apply(str_to_dt))
 
-            if(newData.iloc[i].loc['Date'] == data.iloc[didx].loc['Date']):
-                newData.iloc[i] = data.iloc[didx]
-                didx+=1
-        newData = newData.fillna(-1.0)
+        timestamp_range = pl.date_range(low=data['Date'][0], high=data['Date'][data.shape[0]-1], interval=str.lower(self.interval)) 
+        newData = pl.DataFrame({'Date':timestamp_range})        
+        newData = newData.join(data, on='Date', how='outer')
+        newData = newData.fill_null(-1.0)
+        newData.lazy()
         self.arr.append(newData)
         self.arr_length+=1
 
@@ -125,20 +132,20 @@ class Engine():
             date, data = self.data_at_idx(id)
             for order in outstanding_orders[i]:
                 if(order.buyT_sellF):
-                    price = data.at[order.asset, 'Close']
+                    price = data.select([pl.col('Close')])[order.asset].item()
                     portfolio_delta[i, order.asset] += order.quantity
-                    while(price <= 0 and id >= 0):
+                    while(price <= 0 and id >= idx - 10 and id >= 0):
                         date, data = self.data_at_idx(id)
-                        price = data.at[order.asset, 'Close']
+                        price = data.select([pl.col('Close')])[order.asset].item()
                         id -= 1
                     capital_delta[i] -= order.quantity * price
 
                 elif(~order.buyT_sellF):
                     portfolio_delta[i, order.asset] -= order.quantity
-                    price = data.at[order.asset, 'Close']
-                    while(price <= 0 and id >= 0):
+                    price = data.select([pl.col('Close')])[order.asset].item()
+                    while(price <= 0 and id >= idx - 10 and id >= 0):
                         date, data = self.data_at_idx(id)
-                        price = data.at[order.asset, 'Close']
+                        price = data.select([pl.col('Close')])[order.asset].item()
                         id -= 1
                     capital_delta[i] += order.quantity * price
                 executed_orders.append(order)
@@ -158,52 +165,44 @@ class Engine():
 
 
     def make_data(self):
-        for i in range(len(self.arr[0])):
-            data = self.arr[0].iloc[i].to_frame().transpose()
-            for j in range(1, len(self.arr)):
-                a_data = self.arr[j].iloc[i].to_frame().transpose()
-                data = pd.concat(
-                    [data, a_data], axis=0, ignore_index=True)
-            self.data_arr.append(data)
+        for i in range(len(self.arr)):
+            idx = 0
+            for row in self.arr[i].iter_rows(named=True):
+                if i == 0:
+                    self.data_arr.append(pl.from_dict(row))
+                else:
+                    self.data_arr[idx] = self.data_arr[idx].vstack(pl.from_dict(row))
+                idx+=1
         
 
-    def reformat_arr(self, max_len_idx):
-        timestamp_range = pd.date_range(
-            start=self.arr[max_len_idx]['Date'][0], \
-                end=self.arr[max_len_idx]['Date'][self.arr[max_len_idx].shape[0]-1], \
-                    freq=str.upper(self.interval), tz=dt.timezone.utc).tolist()
-        self.dates = timestamp_range
+    def reformat_arr(self):
+        timestamp_range = pl.date_range(low=self.dates[0], \
+                high=self.dates[len(self.dates)-1], \
+                    interval=str.lower(self.interval)).to_list()
         
-        self.arr[max_len_idx] = self.arr[max_len_idx].fillna(-1.0)
         for j in range(0, len(self.arr)):
-            self.arr[j].reindex_like(self.arr[max_len_idx])
-            if(j != max_len_idx):
-                newData = pd.DataFrame().reindex_like(self.arr[max_len_idx])
-                newData = newData.reindex(np.linspace(0, len(timestamp_range)-1, len(timestamp_range), dtype=int))
-                didx = 0
-                for i in range(len(timestamp_range)):
-                    newData.at[i, 'Date'] = timestamp_range[i]
-                    if(didx < len(self.arr[j]) and newData.at[i, 'Date'] == self.arr[j].at[didx, 'Date']):
-                        newData.iloc[i] = self.arr[j].iloc[didx]
-                        didx+=1
-                newData = newData.fillna(-1.0)
+            if(self.arr[j].shape[0] != len(timestamp_range)):
+                newData = pl.DataFrame({'Date':timestamp_range}) 
+                newData = self.arr[j].join(newData, on='Date', how='outer')
+                newData = newData.fill_null(-1.0)
                 self.arr[j] = newData
         self.make_data()
 
     def setup_run(self):
         if self.arr != []:
-            max_len = self.arr[0].shape[0]
-            max_idx = 0
+            cols = set()
             for i in range(0, len(self.arr)):
-                if(self.arr[i].shape[0] > max_len):
-                    max_len = self.arr[i].shape[0]
-                    max_idx = i
-                if(self.arr[i].shape[1] < 9):
-                    self.arr[i]['Capital Gains'] = np.nan
-            self.reformat_arr(max_idx)
+                cols.update(self.arr[i].columns)
+                
+            for i in range(0, len(self.arr)):
+                for col in cols:
+                    if col not in self.arr[i].columns:
+                        self.arr[i] = self.arr[i].select([pl.all(), pl.lit(-1.0).alias(col)])
+
+            self.reformat_arr()
             self.portfolio_allocations = np.zeros((len(self.strategies), len(self.portfolio_assets)))
             self.portfolio_history = np.ndarray(
-                (len(self.strategies), max_len, len(self.portfolio_assets)+2, 1))
+                (len(self.strategies), len(self.dates), len(self.portfolio_assets)+2, 1))
         else:
             print('No data to test.\n')
 
@@ -217,15 +216,19 @@ class Engine():
         # to avoid an infinite loop
         print("Setting up run for:")
         print(self.portfolio_assets)
+        self.setup_time_start = time.time()
         self.setup_run()
+        self.setup_time_end = time.time()
+        print("Setup time: " + str(self.setup_time_end-self.setup_time_start)+"s")
 
+        self.runtime_start = time.time()
         num_errors = 0
         error = False
         print("Running:")
         printer=1
         for i in range(0, len(self.data_arr)):
             if((i+1) % round(len(self.data_arr)/8) == 0):
-                print(str(printer*12.5) + '%')
+                #print(str(printer*12.5) + '%')
                 printer+=1
             for j in range(len(self.strategies)):
                 date, data = self.data_at_idx(i)
@@ -262,6 +265,8 @@ class Engine():
                         raise InsufficientFundsException()
                     else: continue
         self.plot_history()
+        self.runtime_end = time.time()
+        print("Run time: " + str(self.runtime_end-self.runtime_start)+"s")
 
     # Plot history of portfolio value, summing assets and capital with
     # get_portfolio_cash_value
@@ -291,12 +296,13 @@ class Engine():
         for i in range(len(self.portfolio_allocations[strategy_num])):
             id=idx
             date, data = self.data_at_idx(idx)
-            price = data.at[i, 'Close']
-            while(price <= 0 and id >= 0):
+            price = data.select([pl.col('Close')])[i].item()
+            while(price < 0 and id >= idx - 10 and id >= 0):
                 date, data = self.data_at_idx(id)
-                price = data.at[i, 'Close']
+                price = data.select([pl.col('Close')])[i].item()
                 id -= 1
-            price = data.at[i, 'Close']
+            if price < 0:
+                price = 0
             asset_values += price*self.portfolio_allocations[strategy_num, i]
         return round(asset_values, 2)
 
@@ -332,5 +338,5 @@ def list_to_str(lst):
 # string to datetime
 # TODO (II) add support for UNIX ts and other date formats
 def str_to_dt(s: str) -> dt.datetime:
-    return dateutil.parser.parse(s)
+    return dateutil.parser.parse(s, ignoretz=True)
 

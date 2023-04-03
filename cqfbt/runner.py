@@ -4,17 +4,17 @@ from cqfbt import backtester, strategy
 # the cqfbt package wherin these are contained
 import yfinance as yf
 import numpy as np
-import pandas as pd
+import polars as pl
 import os
 
 if __name__ == "__main__":
-
     class Strat0(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
-            newOrders =[]
-            open = data.loc[:, 'Open'].to_numpy()
-            close = data.loc[:, 'Close'].to_numpy()
-            if(~(open[0] < 0)):
+            newOrders = []
+            open = data.get_column('Open').to_numpy()
+            close = data.get_column('Close').to_numpy()
+
+            if(~(open.any() < 0)):
                 pct_change = (close-open)/open
 
                 buy_indices = []
@@ -50,9 +50,9 @@ if __name__ == "__main__":
     class Strat1(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
             newOrders =[]
-            open = data.loc[:, 'Open'].to_numpy()
-            close = data.loc[:, 'Close'].to_numpy()
-            if(~(open[0] < 0)):
+            open = data.get_column('Open').to_numpy()
+            close = data.get_column('Close').to_numpy()
+            if(~(open.any() < 0)):
                 pct_change = (close-open)/open
 
                 buy_indices = []
