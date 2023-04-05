@@ -25,6 +25,24 @@ class Order():
     quantity = 0
 
     def __init__(self, type, asset_index, quantity,  limit=-1):
+        """ 
+        Initialize an Order.
+    
+        Parameters
+        ------------
+            type: bool
+                True-Buy :: False-Sell
+            asset_index: int
+                The index of the asset being traded in the portfolio, should be 
+                in range(0, len(portfolio_assets)).
+            quantity: float
+                Quantity of asset looking to be traded. Supports fractional 
+                orders for all assets, to limit this functionality add logic
+                within your strategy.
+            limit: float (Optional)
+                Limit price at which to excecute this order 
+                default is -1, or no limit.
+        """
         self.buyT_sellF = type
         self.asset = asset_index
         self.limit = limit
@@ -57,8 +75,26 @@ class Engine():
     runtime_start =0
     runtime_end =0
 
+    setup_required = True
+
     # Initializes sizes of vectors, csv files, etc.
-    def __init__(self, ptfl=[], start_date='', end_date='', interval=''):
+    def __init__(self, start_date, end_date, interval, ptfl=[]):
+        """ 
+        Initialize an Engine
+    
+        Parameters
+        ------------
+            ptfl: list (Optional)
+                List of yfinance tickers for which to pull data.
+            start_date: string
+                first day for which to pull data and test strategies.
+            end_date: string 
+                Last day for which to pull data and backtest.
+            interval: string
+                Periodicity of data between start and end date, if ptfl is
+                nonempty, should be one of “1m”, “2m”, “5m”, “15m”, “30m”, 
+                “60m”, “90m”, “1h”, “1d”, “5d”, “1wk”, “1mo”, “3mo”.
+        """
         print("Initializing engine:")
         self.init_time_start = time.time()
         self.interval = interval
@@ -82,6 +118,15 @@ class Engine():
     # TODO: (II) Takes in path to csv data and adds it to the data folder,
     # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
     def add_data(self, path):
+        """ 
+        Add data file to the Engine.
+    
+        Parameters
+        ------------
+            path: string
+                The path to the data file on your filesystem.
+        """
+        self.setup_required = True
         print("adding " + path)
         path_context = path.split('\\')
         self.portfolio_assets.append(path_context[len(path_context)-1].split('.')[0])
@@ -101,6 +146,18 @@ class Engine():
     # Adds strategy to list of strategies
     # Callable by user
     def add_strategy(self, strategy, init_capital):
+        """ 
+        Add a strategy object to the Engine, for its performance to be 
+        evaluated.
+    
+        Parameters
+        ------------
+            strategy: Strategy
+                Your strategy object.
+            init_capital: float
+                The initial amount of liquid cash you are affording to your
+                strategy.
+    """
         self.capital.append(init_capital)
         self.orders.append([])
         self.strategies.append(strategy)
@@ -210,6 +267,9 @@ class Engine():
     # Main loop, feeds data to strategy, tries to execute specified orders then
     # returns the results back to the strategy. Repeats for all available data
     def run(self):
+        """ 
+        Run all added strategies on the data.
+        """
         # If there is insufficient funds to execute a transaction, the engine will
         # re-feed the same data and try again with the new logic provided by the
         # strategy, if the strategy does nothing different the engine will quit
@@ -217,7 +277,8 @@ class Engine():
         print("Setting up run for:")
         print(self.portfolio_assets)
         self.setup_time_start = time.time()
-        self.setup_run()
+        if self.setup_required == True:
+            self.setup_run()
         self.setup_time_end = time.time()
         print("Setup time: " + str(self.setup_time_end-self.setup_time_start)+"s")
 
@@ -264,13 +325,17 @@ class Engine():
                         print("Strategy " + str(j) + ':')
                         raise InsufficientFundsException()
                     else: continue
-        self.plot_history()
+        self.setup_required = False
         self.runtime_end = time.time()
         print("Run time: " + str(self.runtime_end-self.runtime_start)+"s")
 
     # Plot history of portfolio value, summing assets and capital with
     # get_portfolio_cash_value
-    def plot_history(self) -> None:
+    def plot_all_strategies(self) -> None:
+        """ 
+        Generate a plot for the performance of each strategy. If the engine
+        has not been run, this will fail.
+        """
         dates = self.dates
         sns.set_theme()
         for j in range(len(self.strategies)):
@@ -287,6 +352,95 @@ class Engine():
             ax.set_ylabel("Value")
             ax.plot(dates, values)
             fig.savefig("strategy" + str(j) + "_performance.pdf")
+
+
+    # Plot history of portfolio value, summing assets and capital with
+    # get_portfolio_cash_value
+    def plot_strategies(self, name='', names=[]) -> None:
+        """ 
+        Generate a plot for the performance of a single strategy, or specified 
+        list of strategies. If the engine has not been run, this will fail.
+    
+        Parameters
+        ------------
+            name: string (Optional)
+                The name of the single strategy to be plotted.
+            names: list (Optional)
+                The list of names of each strategy to be plotted.
+        """
+        dates = self.dates
+        sns.set_theme()
+        for j in range(len(self.strategies)):
+            if self.strategies[j].name == name:
+                values = np.add(self.portfolio_history[j, :, len(
+                    self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
+                font = {'family' : 'Times New Roman',
+                        'weight' : 'bold',
+                        'size'   : '18'}
+                fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+                ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
+                ax.set_xlabel("Date")
+                ax.set_ylabel("Value")
+                ax.plot(dates, values)
+                fig.savefig(self.strategies[j].get_name() + "_performance.pdf")
+
+    # Plot history of portfolio value, summing assets and capital with
+    # get_portfolio_cash_value
+    def plot_strategy_with_orders(self, name='', names=[], threshold=0) -> None:
+        """ 
+        Generate a plot for the performance of a single strategy, or specified 
+        list of strategies. If the engine has not been run, this will fail.
+    
+        Parameters
+        ------------
+            name: string (Optional)
+                The name of the single strategy to be plotted.
+            names: list (Optional)
+                The list of names of each strategy to be plotted.
+            threshold: float (Optional)
+                in [0, 1], will selectively plot the scatter points where the
+                normalized order volume is above the threshold, if threshold
+                is 0, all orders will be plotted, if threshold is 1, only the 
+                interval where the largest amount of orders were executed is
+                plotted.
+            
+        """
+        dates = self.dates
+        sns.set_theme()
+        for k in range(len(names)):
+            for j in range(len(self.strategies)):
+                if self.strategies[j].name == names[k]:
+                    order_deltas = np.diff(self.portfolio_history[j, :, len(self.portfolio_allocations)], axis=0)
+                    order_deltas = np.sum(order_deltas, axis=1)
+
+                    order_deltas_norm =  order_deltas / np.max(abs(order_deltas))
+                    values = np.add(self.portfolio_history[j, :, len(
+                        self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
+                    font = {'family' : 'Times New Roman',
+                            'weight' : 'bold',
+                            'size'   : '18'}
+                    subfont = {'family' : 'Times New Roman',
+                            'weight' : 'bold',
+                            'size'   : '10'}
+                    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+                    cmap_pos = plt.cm.get_cmap('YlGn')
+                    cmap_neg = plt.cm.get_cmap('YlOrRd')
+                    for i in range(len(values)-1):
+                        if order_deltas_norm[i] >= threshold:
+                            color = cmap_pos(order_deltas_norm[i])
+                            marker = '^'
+                            ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+                        elif order_deltas_norm[i] <= -threshold:
+                            color = cmap_neg(-order_deltas_norm[i])
+                            marker = 'v'
+                            ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+
+                    ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
+                    ax.set_title('Threshold = ' + str(threshold), loc='right', font=subfont)
+                    ax.set_xlabel("Date")
+                    ax.set_ylabel("Value")
+                    ax.plot(dates, values)
+                    fig.savefig(self.strategies[j].get_name() + "_performance_orders.pdf")
 
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
@@ -308,6 +462,12 @@ class Engine():
 
     # Clears all data files in data folder
     def clear_data(self):
+        """
+        Clear all data from the engine.
+        """
+        self.arr = []
+        self.data_arr = []
+        self.dates = []
         for i in range(0, len(self.portfolio_assets)):
             self.remove_data(self.portfolio_assets[i], i)
 
@@ -315,13 +475,29 @@ class Engine():
     # Can specify a ticker, or if it is user-added data, the index
     # of the asset in the portfolio
     # TODO: (II) remove user-added data files by name
-    def remove_data(self, ticker='', assetNo=-1):
+    def remove_data(self, data='', assetNo=-1):
+        """ 
+        Remove a specified data file from the engine.
+    
+        Parameters
+        ------------
+            data: string (Optional)
+                The name of the file to be removed, the filename should be of
+                the format data.csv, the data parameter will be directly placed 
+                into a string that already contains '.csv'
+            assetNo: int (Optional)
+                The index of the asset to be removed, indices are arranged by 
+                the order in which they were added to the engine, with tickers
+                passed in the constructor given priority.
+        """
         if (assetNo >= 0):
             file = self.portfolio_assets[assetNo]
             path = "cqfbt\\data\\" + f"{file}.csv"
             if(os.path.exists(path)):
                 os.remove(path)
-
+        
+    def __del__(self):
+        self.clear_data()
 
 class InsufficientFundsException(Exception):
     def __init__(self, message='Insufficient Funds to perform transaction.'):

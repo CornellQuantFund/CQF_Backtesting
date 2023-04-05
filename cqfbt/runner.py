@@ -90,8 +90,8 @@ if __name__ == "__main__":
     yf.Ticker("ETH-USD").history(start=start, end=end, interval=intvl).to_csv("ethereum.csv")
     
 
-    eng = backtester.Engine(
-        ['SPY', 'TSLA', 'AAPL', 'JPM'], start, end, intvl)
+    eng = backtester.Engine(start, end, intvl, 
+        ['SPY', 'TSLA', 'AAPL', 'JPM'])
     eng.add_data('netflix.csv')
     eng.add_data('amazon.csv')
     eng.add_data('bitcoin.csv')
@@ -99,8 +99,7 @@ if __name__ == "__main__":
     eng.add_strategy(s0, 1000000)
     eng.add_strategy(s1, 1000000)
     eng.run()
-
-    eng.clear_data()
+    eng.plot_strategy_with_orders(names=['Momentum Trader', 'Nervous Momentum Trader'], threshold = .1)
 
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")
