@@ -195,6 +195,27 @@ class Engine():
         date_idx = self.dates.index(date)
         assets_value = np.dot(self.portfolio_allocations[:, 0], self.arr.loc[date_idx].iloc[data_idx])
         return self.capital + round(assets_value, 2)
+    
+    def get_sharpe_ratio(self) -> float:
+        # get portfolio values
+        portfolio_value = np.add(self.portfolio_history[:, len(self.portfolio_assets)], self.portfolio_history[:, len(self.portfolio_assets)+1])
+        portfolio_returns = np.diff(portfolio_value) / portfolio_value[:-1]
+        portfolio_avg_annual_return = np.mean(portfolio_returns) * 252
+        portfolio_std_dev = np.std(portfolio_returns) * np.sqrt(252)
+
+        # get SPY values
+        spy = yf.Ticker('SPY')
+        spy_values = spy.history(start=self.portfolio_history.index[0], end=self.portfolio_history.index[-1])
+        spy_close = spy_values['Close']
+        spy_returns = np.diff(spy_close) / spy_close[:-1]
+        spy_avg_annual_return = np.mean(spy_returns) * 252
+        spy_std_dev = np.std(spy_returns) * np.sqrt(252)
+        
+        # relative sharpe ratio
+        sharpe_ratio = (portfolio_avg_annual_return - spy_avg_annual_return)
+        sharpe_ratio /= np.sqrt(portfolio_std_dev**2 + spy_std_dev**2)
+        
+        return sharpe_ratio
 
     # Clears all data files in data folder
     def clear_data(self):
