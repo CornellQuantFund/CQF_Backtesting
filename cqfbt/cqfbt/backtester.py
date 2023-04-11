@@ -481,12 +481,21 @@ class Engine():
         
         return sharpe_ratio
 
+
     def get_info_ratio(self, benchmark):
         portfolio_value = np.add(self.portfolio_history[:, len(self.portfolio_assets)], self.portfolio_history[:, len(self.portfolio_assets)+1])
         portfolio_returns = np.diff(portfolio_value) / portfolio_value[:-1]
         excess_returns = portfolio_returns - benchmark
         info_ratio = np.mean(excess_returns) / np.std(excess_returns)
         return info_ratio
+
+
+    def get_max_drawdown(self):
+        portfolio_value = np.add(self.portfolio_history[:, len(self.portfolio_assets)], self.portfolio_history[:, len(self.portfolio_assets)+1])
+        peaks = np.maximum.accumulate(portfolio_value)
+        drawdowns = (peaks - portfolio_value) / peaks
+        return np.max(drawdowns)
+
 
     # Clears all data files in data folder
     def clear_data(self):
