@@ -96,13 +96,16 @@ if __name__ == "__main__":
     eng.add_data('amazon.csv')
     eng.add_data('bitcoin.csv')
     eng.add_data('ethereum.csv')
+
     eng.add_strategy(s0, 1000000)
+    eng.run()
+    eng.plot_strategies(orders = True, order_threshold = .5, suffix='run1')
+
     eng.add_strategy(s1, 1000000)
     eng.run()
-    eng.plot_strategy_with_orders(names=['Momentum Trader', 'Nervous Momentum Trader'], threshold = .1)
+    eng.plot_strategies(orders = True, order_threshold = .2, suffix='run2')
 
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")
     os.remove("amazon.csv")
     os.remove("netflix.csv")
-

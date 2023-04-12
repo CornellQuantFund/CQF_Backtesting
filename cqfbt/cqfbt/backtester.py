@@ -58,6 +58,7 @@ class Engine():
     portfolio_assets = [] # List of strings representing the tickers or data filenames we are testing on
     portfolio_allocations = [] # List of lists of rational numbers representing our strategies current holding quantities for each asset
     portfolio_history = [] # List of np arrays, keeps track of our allocations, capital and portfolio value for each strategy
+    strategy_capital = [] # List of initial capital values for each strategy
     capital = [] # List of capital values for each strategy
 
     orders = [] # List of lists, each containing the orders each strategy is hoping to execute
@@ -113,7 +114,8 @@ class Engine():
     # Saves csv files in data folder
     def get_info_on_stocks(self, start, end, ptfl):
         for i in range(0, len(ptfl)):
-            yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")
+            if(~os.path.isfile("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")):
+                yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")
 
     # TODO: (II) Takes in path to csv data and adds it to the data folder,
     # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
@@ -158,10 +160,12 @@ class Engine():
                 The initial amount of liquid cash you are affording to your
                 strategy.
     """
+        self.strategy_capital.append(init_capital)
         self.capital.append(init_capital)
         self.orders.append([])
         self.strategies.append(strategy)
-        # Exend portfolio_history into 3rd dimension +1
+        if(len(self.portfolio_history)>0):
+            self.portfolio_history.append(np.zeros_like(self.portfolio_history[0]))
 
     
     def data_at_idx(self, idx):
@@ -169,9 +173,10 @@ class Engine():
 
     # Updates portfolio and capital according to executed orders
     def update_portfolio(self, portfolio_delta, capital_delta):
-        self.capital = np.around(np.add(self.capital, capital_delta), decimals=2)
-        self.portfolio_allocations = np.add(
-            self.portfolio_allocations, portfolio_delta)
+        for i in range(len(self.strategies)):
+            self.capital[i] = np.around(self.capital[i]+capital_delta[i], decimals = 2)
+            self.portfolio_allocations[i] = np.add(
+                self.portfolio_allocations[i], portfolio_delta[i])
 
     #   Executes orders at prices found in the data, and returns change in
     #   portfolio and capital as a result. Returns any orders which did not execute
@@ -257,9 +262,7 @@ class Engine():
                         self.arr[i] = self.arr[i].select([pl.all(), pl.lit(-1.0).alias(col)])
 
             self.reformat_arr()
-            self.portfolio_allocations = np.zeros((len(self.strategies), len(self.portfolio_assets)))
-            self.portfolio_history = np.ndarray(
-                (len(self.strategies), len(self.dates), len(self.portfolio_assets)+2, 1))
+            
         else:
             print('No data to test.\n')
 
@@ -277,6 +280,12 @@ class Engine():
         print("Setting up run for:")
         print(self.portfolio_assets)
         self.setup_time_start = time.time()
+        self.portfolio_allocations = []
+        self.portfolio_history=[]
+        for i in range(len(self.strategies)):
+                self.capital[i] = self.strategy_capital[i]
+                self.portfolio_allocations.append(np.zeros(len(self.portfolio_assets)))
+                self.portfolio_history.append(np.zeros((len(self.dates), len(self.portfolio_assets)+2, 1)))
         if self.setup_required == True:
             self.setup_run()
         self.setup_time_end = time.time()
@@ -291,24 +300,25 @@ class Engine():
             if((i+1) % round(len(self.data_arr)/8) == 0):
                 #print(str(printer*12.5) + '%')
                 printer+=1
+                
+            date, data = self.data_at_idx(i)
             for j in range(len(self.strategies)):
-                date, data = self.data_at_idx(i)
                 self.strategies[j].append_data_history(data)
                 # Portfolio History keeps track of asset allocations
                 for k in range(0, len(self.portfolio_assets)):
-                    self.portfolio_history[j, i, k] = self.portfolio_allocations[j, k]
+                    self.portfolio_history[j][i, k] = self.portfolio_allocations[j][k]
                 # And capital
-                self.portfolio_history[j, i, len(
+                self.portfolio_history[j][i, len(
                     self.portfolio_assets)] = self.capital[j]
                 # And total portfolio value
-                self.portfolio_history[j, i, len(
+                self.portfolio_history[j][i, len(
                     self.portfolio_assets)+1] = self.get_portfolio_cash_value(i, j)
 
                 # Testing purposes
-                #print(str(i) + ' ::: ' + str(date) + ' ::: ' +
-                #       list_to_str(self.portfolio_history[j, i, :]))
+                if(i % 5 ==0 and False):
+                    print(str(i) + ' ::: ' + str(date) + ' ::: ' +
+                       list_to_str(self.portfolio_history[j][i, :]))
 
-                # for now supports only one   V   strategy
                 self.orders[j] = self.strategies[j].execute(
                     date, data, self.portfolio_allocations[j], self.capital[j], self.orders[j], error, self.portfolio_assets)
                 error = False
@@ -329,118 +339,56 @@ class Engine():
         self.runtime_end = time.time()
         print("Run time: " + str(self.runtime_end-self.runtime_start)+"s")
 
-    # Plot history of portfolio value, summing assets and capital with
-    # get_portfolio_cash_value
-    def plot_all_strategies(self) -> None:
-        """ 
-        Generate a plot for the performance of each strategy. If the engine
-        has not been run, this will fail.
-        """
-        dates = self.dates
-        sns.set_theme()
-        for j in range(len(self.strategies)):
-            values = np.add(self.portfolio_history[j, :, len(
-                self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
-
-                
-            font = {'family' : 'Times New Roman',
-                    'weight' : 'bold',
-                    'size'   : '18'}
-            fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
-            ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Value")
-            ax.plot(dates, values)
-            fig.savefig("strategy" + str(j) + "_performance.pdf")
-
 
     # Plot history of portfolio value, summing assets and capital with
     # get_portfolio_cash_value
-    def plot_strategies(self, name='', names=[]) -> None:
+    def plot_strategies(self, names='all', orders=False, order_threshold=0.1, suffix = '') -> None:
         """ 
         Generate a plot for the performance of a single strategy, or specified 
         list of strategies. If the engine has not been run, this will fail.
     
         Parameters
         ------------
-            name: string (Optional)
-                The name of the single strategy to be plotted.
-            names: list (Optional)
+            names: list / string (Optional)
                 The list of names of each strategy to be plotted.
+                Default: all
         """
         dates = self.dates
         sns.set_theme()
         for j in range(len(self.strategies)):
-            if self.strategies[j].name == name:
-                values = np.add(self.portfolio_history[j, :, len(
-                    self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
+            if names == 'all' or names.__contains__(self.strategies[j].name):
+                values = np.add(self.portfolio_history[j][:, len(
+                    self.portfolio_assets)+1], self.portfolio_history[j][:, len(self.portfolio_assets)])
                 font = {'family' : 'Times New Roman',
                         'weight' : 'bold',
                         'size'   : '18'}
                 fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+
+                if(orders):
+                        order_deltas = np.diff(self.portfolio_history[j][:, len(self.portfolio_allocations[j])], axis=0)
+                        order_deltas = np.sum(order_deltas, axis=1)
+                        order_deltas_norm =  order_deltas / np.max(abs(order_deltas))
+                        cmap_pos = plt.cm.get_cmap('YlGn')
+                        cmap_neg = plt.cm.get_cmap('YlOrRd')
+                        for i in range(len(values)-1):
+                            if order_deltas_norm[i] >= order_threshold:
+                                color = cmap_pos(order_deltas_norm[i])
+                                marker = '^'
+                                ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+                            elif order_deltas_norm[i] <= -order_threshold:
+                                color = cmap_neg(-order_deltas_norm[i])
+                                marker = 'v'
+                                ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+
                 ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
                 ax.set_xlabel("Date")
                 ax.set_ylabel("Value")
                 ax.plot(dates, values)
-                fig.savefig(self.strategies[j].get_name() + "_performance.pdf")
+                if(suffix != ''):
+                    suffix = '_' + suffix
+                fig.savefig(self.strategies[j].get_name() + "_performance"+ suffix +".pdf")
 
-    # Plot history of portfolio value, summing assets and capital with
-    # get_portfolio_cash_value
-    def plot_strategy_with_orders(self, name='', names=[], threshold=0) -> None:
-        """ 
-        Generate a plot for the performance of a single strategy, or specified 
-        list of strategies. If the engine has not been run, this will fail.
-    
-        Parameters
-        ------------
-            name: string (Optional)
-                The name of the single strategy to be plotted.
-            names: list (Optional)
-                The list of names of each strategy to be plotted.
-            threshold: float (Optional)
-                in [0, 1], will selectively plot the scatter points where the
-                normalized order volume is above the threshold, if threshold
-                is 0, all orders will be plotted, if threshold is 1, only the 
-                interval where the largest amount of orders were executed is
-                plotted.
-            
-        """
-        dates = self.dates
-        sns.set_theme()
-        for k in range(len(names)):
-            for j in range(len(self.strategies)):
-                if self.strategies[j].name == names[k]:
-                    order_deltas = np.diff(self.portfolio_history[j, :, len(self.portfolio_allocations)], axis=0)
-                    order_deltas = np.sum(order_deltas, axis=1)
 
-                    order_deltas_norm =  order_deltas / np.max(abs(order_deltas))
-                    values = np.add(self.portfolio_history[j, :, len(
-                        self.portfolio_assets)+1], self.portfolio_history[j, :, len(self.portfolio_assets)])
-                    font = {'family' : 'Times New Roman',
-                            'weight' : 'bold',
-                            'size'   : '18'}
-                    subfont = {'family' : 'Times New Roman',
-                            'weight' : 'bold',
-                            'size'   : '10'}
-                    fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
-                    cmap_pos = plt.cm.get_cmap('YlGn')
-                    cmap_neg = plt.cm.get_cmap('YlOrRd')
-                    for i in range(len(values)-1):
-                        if order_deltas_norm[i] >= threshold:
-                            color = cmap_pos(order_deltas_norm[i])
-                            marker = '^'
-                            ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
-                        elif order_deltas_norm[i] <= -threshold:
-                            color = cmap_neg(-order_deltas_norm[i])
-                            marker = 'v'
-                            ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
-
-                    ax.set_title("Portfolio History: " + self.strategies[j].get_name(), font=font)
-                    ax.set_title('Threshold = ' + str(threshold), loc='right', font=subfont)
-                    ax.set_xlabel("Date")
-                    ax.set_ylabel("Value")
-                    ax.plot(dates, values)
-                    fig.savefig(self.strategies[j].get_name() + "_performance_orders.pdf")
 
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
@@ -457,7 +405,7 @@ class Engine():
                 id -= 1
             if price < 0:
                 price = 0
-            asset_values += price*self.portfolio_allocations[strategy_num, i]
+            asset_values += price*self.portfolio_allocations[strategy_num][i]
         return round(asset_values, 2)
 
     # Clears all data files in data folder
