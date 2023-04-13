@@ -98,15 +98,13 @@ if __name__ == "__main__":
     eng.add_data('ethereum.csv')
 
     eng.add_strategy(s0, 1000000)
-    #eng.run()
-    #eng.plot_strategies(orders = True, order_threshold = .5, suffix='run1')
-
     eng.add_strategy(s1, 1000000)
     eng.run()
-    eng.plot_strategies(orders = True, order_threshold = .2, suffix='run2')
+    eng.plot_strategies(orders = True, order_threshold = .5, suffix='run1')
+    eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
 
     print("Sharpe: " + str(eng.get_sharpe_ratio()))
-    print("Info ratio: " + str(eng.get_info_ratio(benchmark = 0.001)))
+    print("Info ratio: " + str(eng.get_info_ratio()))
     print("Max Draw: " + str(eng.get_max_drawdown()))
 
     os.remove("bitcoin.csv")

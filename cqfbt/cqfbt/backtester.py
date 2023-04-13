@@ -63,6 +63,9 @@ class Engine():
 
     orders = [] # List of lists, each containing the orders each strategy is hoping to execute
     arr = [] # List of data frames, one for each asset
+
+    market = ('SPY', -1) # Ticker used as market reference, index in asset portfolio. default SPY
+    market_arr = pl.DataFrame() # Data frame for market data, used as benchmark in sharpe
     data_arr = [] # List of data frames, one for each trading interval, containing all relevent data on that cycle
     arr_length = 0 # 
     strategies = [] # List of strategy objects, each acting independently
@@ -105,9 +108,15 @@ class Engine():
         self.dates = pl.date_range(low=str_to_dt(start_date), high=str_to_dt(end_date), interval=str.lower(interval))
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
+            if ticker == 'SPX' or ticker == 'DJI' or  ticker =='NDAQ':
+                self.market = (ticker, i)
+                print(ticker)
             self.add_data("cqfbt\\data\\"+f"{ticker}_hist.csv")
+        
         self.init_time_end = time.time()
         print("Initialization time: " + str(self.init_time_end-self.init_time_start)+"s")
+
+
 
 
     # Gets yf data on stocks in optional portfolio argument
@@ -116,6 +125,9 @@ class Engine():
         for i in range(0, len(ptfl)):
             if(~os.path.isfile("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")):
                 yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")
+
+
+
 
     # TODO: (II) Takes in path to csv data and adds it to the data folder,
     # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
@@ -239,7 +251,7 @@ class Engine():
 
     def reformat_arr(self):
         timestamp_range = pl.date_range(low=self.dates[0], \
-                high=self.dates[len(self.dates)-1], \
+                high=self.dates[-1], \
                     interval=str.lower(self.interval)).to_list()
         
         for j in range(0, len(self.arr)):
@@ -248,7 +260,19 @@ class Engine():
                 newData = self.arr[j].join(newData, on='Date', how='outer')
                 newData = newData.fill_null(-1.0)
                 self.arr[j] = newData
+                if(j == self.market[1]):
+                    self.market_arr = self.arr[j][['Date', 'Close']]
+
+        if self.market_arr.is_empty():
+            newData = pl.DataFrame({'Date':timestamp_range})
+            yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
+            data = pl.read_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
+            data.replace('Date', data.get_column('Date').apply(str_to_dt))
+            newData = newData.join(data, on='Date', how='outer')
+            self.market_arr = newData[['Date', 'Close']]
+        self.market_arr = self.market_arr.fill_null(-1.0)
         self.make_data()
+
 
     def setup_run(self):
         if self.arr != []:
@@ -388,7 +412,64 @@ class Engine():
                     suffix = '_' + suffix
                 fig.savefig(self.strategies[j].get_name() + "_performance"+ suffix +".pdf")
 
+        # Plot history of portfolio value, summing assets and capital with
 
+
+    def plot_aggregate(self, names='all', orders=False, order_threshold=0.1, title = '', mkt_ref = False) -> None:
+        """ 
+        Generate a plot for the performance of a single strategy, or specified 
+        list of strategies. If the engine has not been run, this will fail.
+    
+        Parameters
+        ------------
+            names: list / string (Optional)
+                The list of names of each strategy to be plotted.
+                Default: all
+        """
+        dates = self.dates
+        sns.set_theme()
+        font = {'family' : 'Times New Roman',
+                        'weight' : 'bold',
+                        'size'   : '18'}
+        fig, ax = plt.subplots(figsize=(8, 6), tight_layout=True)
+        for j in range(len(self.strategies)):
+            if names == 'all' or names.__contains__(self.strategies[j].name):
+                values = np.add(self.portfolio_history[j][:, len(
+                    self.portfolio_assets)+1], self.portfolio_history[j][:, len(self.portfolio_assets)])
+
+                if(orders):
+                        order_deltas = np.diff(self.portfolio_history[j][:, len(self.portfolio_allocations[j])], axis=0)
+                        order_deltas = np.sum(order_deltas, axis=1)
+                        order_deltas_norm =  order_deltas / np.max(abs(order_deltas))
+                        cmap_pos = plt.cm.get_cmap('YlGn')
+                        cmap_neg = plt.cm.get_cmap('YlOrRd')
+                        for i in range(len(values)-1):
+                            if order_deltas_norm[i] >= order_threshold:
+                                color = cmap_pos(order_deltas_norm[i])
+                                marker = '^'
+                                ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+                            elif order_deltas_norm[i] <= -order_threshold:
+                                color = cmap_neg(-order_deltas_norm[i])
+                                marker = 'v'
+                                ax.scatter(dates[i+1], values[i+1], color=color, marker=marker, edgecolors='black', linewidths=0.1)
+                ax.plot(dates, values, label = self.strategies[j].name)
+        if(mkt_ref):
+            axlims = ax.get_ylim()
+            center = (axlims[0]+axlims[1]) / 2
+            ax2 = ax.twinx()  
+            mkt_dates = self.market_arr['Date'].to_numpy()
+            mkt_vals = self.market_arr['Close'].to_numpy()
+            ax2.axis(ymin=axlims[0]/center * np.min(mkt_vals[mkt_vals > 0]), ymax=axlims[1]/center * np.max(mkt_vals[mkt_vals > 0]))
+            ax2.plot(mkt_dates[mkt_vals > 0], mkt_vals[mkt_vals > 0], color='black', label=self.market[0])
+            ax2.legend(loc='upper left')
+        if(title == ''):
+            title = 'performance'
+        ax.set_title(title, font=font)
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Value")
+            
+        ax.legend()
+        fig.savefig(title + ".pdf")
 
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
@@ -407,18 +488,15 @@ class Engine():
                 price = 0
             asset_values += price*self.portfolio_allocations[strategy_num][i]
         return round(asset_values, 2)
-    
-
 
 
     def get_sharpe_ratio(self):
         # get SPY values
-        spy = yf.Ticker('SPY')
-        spy_values = spy.history(start=self.dates[0], end=self.dates[-1])
-        spy_close = spy_values['Close']
-        spy_returns = np.diff(spy_close) / spy_close[:-1]
-        spy_avg_annual_return = np.mean(spy_returns) * 252
-        spy_std_dev = np.std(spy_returns) * np.sqrt(252)
+        mkt_close = self.market_arr['Close'].to_numpy()
+        mkt_close = mkt_close[mkt_close > 0]
+        mkt_returns = np.diff(mkt_close) / mkt_close[:-1]
+        mkt_avg_annual_return = np.mean(mkt_returns) * 252
+        mkt_std_dev = np.std(mkt_returns) * np.sqrt(252)
 
         # get portfolio values
         sharpe_ratio = []
@@ -428,18 +506,31 @@ class Engine():
             avg_annual_return = np.mean(strategy_returns) * 252
             std_dev = np.std(strategy_returns) * np.sqrt(252)
             # relative sharpe ratio
-            sharpe_ratio.append((avg_annual_return - spy_avg_annual_return)/np.sqrt(std_dev**2 + spy_std_dev**2))
+            sharpe_ratio.append((avg_annual_return - mkt_avg_annual_return)/np.sqrt(std_dev**2 + mkt_std_dev**2))
         
         return sharpe_ratio
 
 
-    def get_info_ratio(self, benchmark=0):
+    def get_info_ratio(self, benchmark=''):
+        if benchmark == '':
+            benchmark = self.market[0]
+            
+        idx = 0
+        benchmark_value = self.market_arr['Close'].to_numpy(writable=True)
+        while benchmark_value[idx] < 0:
+            idx+=1
+        for i in range(len(benchmark_value)):
+            if i < idx:
+                benchmark_value[i] = benchmark_value[idx]
+            elif benchmark_value[i] < 0:
+                benchmark_value[i] = benchmark_value[i-1]
+        benchmark_returns = np.divide(np.diff(benchmark_value, axis=0), benchmark_value[:-1])
         info_ratio = []
         for i in range(len(self.strategies)):
             portfolio_value = np.add(self.portfolio_history[i][:, len(self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
             strategy_returns = np.divide(np.diff(portfolio_value, axis=0), portfolio_value[:-1])
             
-            excess_returns = strategy_returns - benchmark
+            excess_returns = np.subtract(strategy_returns, benchmark_returns)
             info_ratio.append(np.mean(excess_returns) / np.std(excess_returns))
         
         return info_ratio
@@ -455,8 +546,6 @@ class Engine():
         return max_drawdowns
 
 
-
-
     # Clears all data files in data folder
     def clear_data(self):
         """
@@ -467,6 +556,7 @@ class Engine():
         self.dates = []
         for i in range(0, len(self.portfolio_assets)):
             self.remove_data(self.portfolio_assets[i], i)
+        self.remove_data('market_benchmark_internal_hist')
 
     # Removes a specific data file from data folder
     # Can specify a ticker, or if it is user-added data, the index
