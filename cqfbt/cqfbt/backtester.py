@@ -407,6 +407,55 @@ class Engine():
                 price = 0
             asset_values += price*self.portfolio_allocations[strategy_num][i]
         return round(asset_values, 2)
+    
+
+
+
+    def get_sharpe_ratio(self):
+        # get SPY values
+        spy = yf.Ticker('SPY')
+        spy_values = spy.history(start=self.dates[0], end=self.dates[-1])
+        spy_close = spy_values['Close']
+        spy_returns = np.diff(spy_close) / spy_close[:-1]
+        spy_avg_annual_return = np.mean(spy_returns) * 252
+        spy_std_dev = np.std(spy_returns) * np.sqrt(252)
+
+        # get portfolio values
+        sharpe_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            strategy_returns = np.divide(np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            avg_annual_return = np.mean(strategy_returns) * 252
+            std_dev = np.std(strategy_returns) * np.sqrt(252)
+            # relative sharpe ratio
+            sharpe_ratio.append((avg_annual_return - spy_avg_annual_return)/np.sqrt(std_dev**2 + spy_std_dev**2))
+        
+        return sharpe_ratio
+
+
+    def get_info_ratio(self, benchmark=0):
+        info_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            strategy_returns = np.divide(np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            
+            excess_returns = strategy_returns - benchmark
+            info_ratio.append(np.mean(excess_returns) / np.std(excess_returns))
+        
+        return info_ratio
+
+
+    def get_max_drawdown(self):
+        max_drawdowns = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            peaks = np.maximum.accumulate(portfolio_value)
+            drawdowns = (peaks-portfolio_value) / peaks
+            max_drawdowns.append(np.max(drawdowns))
+        return max_drawdowns
+
+
+
 
     # Clears all data files in data folder
     def clear_data(self):
