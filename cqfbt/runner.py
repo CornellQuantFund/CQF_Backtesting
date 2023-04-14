@@ -80,16 +80,14 @@ if __name__ == "__main__":
     s0 = Strat0('Momentum Trader')
     s1= Strat1('Nervous Momentum Trader')
 
-    
-    start = '2021-01-01'
+    start = '2022-01-01'
     end = '2023-01-01'
-    intvl = '1d'
+    intvl = '1h'
     yf.Ticker("NFLX").history(start=start, end=end, interval=intvl).to_csv("netflix.csv")
     yf.Ticker("AMZN").history(start=start, end=end, interval=intvl).to_csv("amazon.csv")
     yf.Ticker("BTC-USD").history(start=start, end=end, interval=intvl).to_csv("bitcoin.csv")
     yf.Ticker("ETH-USD").history(start=start, end=end, interval=intvl).to_csv("ethereum.csv")
     
-
     eng = backtester.Engine(start, end, intvl, 
         ['SPY', 'TSLA', 'AAPL', 'JPM'])
     eng.add_data('netflix.csv')
@@ -100,7 +98,7 @@ if __name__ == "__main__":
     eng.add_strategy(s0, 1000000)
     eng.add_strategy(s1, 1000000)
     eng.run()
-    eng.plot_strategies(orders = True, order_threshold = .5, suffix='run1')
+    eng.plot_strategies(orders = True, order_threshold = .2, suffix='run1')
     eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
 
     print("Sharpe: " + str(eng.get_sharpe_ratio()))

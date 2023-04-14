@@ -55,11 +55,13 @@ class Order():
 class Engine():
     dates = [] # List of datetime objects, from start date to end date separated by interval
     interval = '' # String representing time between data points "1d", "1w", "2h", etc.
+    date_interval = None # Tuple of int representing num intervals, and string representing interval, '(1, "h")'
     portfolio_assets = [] # List of strings representing the tickers or data filenames we are testing on
     portfolio_allocations = [] # List of lists of rational numbers representing our strategies current holding quantities for each asset
     portfolio_history = [] # List of np arrays, keeps track of our allocations, capital and portfolio value for each strategy
     strategy_capital = [] # List of initial capital values for each strategy
     capital = [] # List of capital values for each strategy
+    MRC_prices = [] # List of most recent close prices for eachh asset in portfolio
 
     orders = [] # List of lists, each containing the orders each strategy is hoping to execute
     arr = [] # List of data frames, one for each asset
@@ -102,10 +104,13 @@ class Engine():
         print("Initializing engine:")
         self.init_time_start = time.time()
         self.interval = interval
+        num = "".join([char for char in self.interval if char.isnumeric()])
+        intvl = "".join([char for char in self.interval if char.isalpha()])
+        self.date_interval = (intvl, num)
         self.get_info_on_stocks(start_date, end_date, ptfl)
         logging.basicConfig(filename='backtesting_log.log', filemode='w', format='%(levelname)s - %(message)s',
                             level=logging.INFO)
-        self.dates = pl.date_range(low=str_to_dt(start_date), high=str_to_dt(end_date), interval=str.lower(interval))
+        self.dates = pl.date_range(low=self.str_to_dt(start_date), high=self.str_to_dt(end_date), interval=str.lower(interval))
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             if ticker == 'SPX' or ticker == 'DJI' or  ticker =='NDAQ':
@@ -146,7 +151,12 @@ class Engine():
         self.portfolio_assets.append(path_context[len(path_context)-1].split('.')[0])
         data = pl.read_csv(path)
         
-        data.replace('Date', data.get_column('Date').apply(str_to_dt))
+        try:
+            data = data.rename({'Datetime': 'Date'})
+        except:
+            pass
+            
+        data.replace('Date', data.get_column('Date').apply(self.str_to_dt))
 
         timestamp_range = pl.date_range(low=data['Date'][0], high=data['Date'][data.shape[0]-1], interval=str.lower(self.interval)) 
         newData = pl.DataFrame({'Date':timestamp_range})        
@@ -208,19 +218,19 @@ class Engine():
                 if(order.buyT_sellF):
                     price = data.select([pl.col('Close')])[order.asset].item()
                     portfolio_delta[i, order.asset] += order.quantity
-                    while(price <= 0 and id >= idx - 10 and id >= 0):
-                        date, data = self.data_at_idx(id)
-                        price = data.select([pl.col('Close')])[order.asset].item()
-                        id -= 1
+                    if price < 0:
+                        price = self.MRC_prices[order.asset]
+                    else:
+                        self.MRC_prices[order.asset] = price
                     capital_delta[i] -= order.quantity * price
 
                 elif(~order.buyT_sellF):
                     portfolio_delta[i, order.asset] -= order.quantity
                     price = data.select([pl.col('Close')])[order.asset].item()
-                    while(price <= 0 and id >= idx - 10 and id >= 0):
-                        date, data = self.data_at_idx(id)
-                        price = data.select([pl.col('Close')])[order.asset].item()
-                        id -= 1
+                    if price < 0:
+                        price = self.MRC_prices[order.asset]
+                    else:
+                        self.MRC_prices[order.asset] = price
                     capital_delta[i] += order.quantity * price
                 executed_orders.append(order)
 
@@ -247,7 +257,6 @@ class Engine():
                 else:
                     self.data_arr[idx] = self.data_arr[idx].vstack(pl.from_dict(row))
                 idx+=1
-        
 
     def reformat_arr(self):
         timestamp_range = pl.date_range(low=self.dates[0], \
@@ -267,7 +276,11 @@ class Engine():
             newData = pl.DataFrame({'Date':timestamp_range})
             yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
             data = pl.read_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
-            data.replace('Date', data.get_column('Date').apply(str_to_dt))
+            try:
+                data = data.rename({'Datetime': 'Date'})
+            except:
+                pass
+            data.replace('Date', data.get_column('Date').apply(self.str_to_dt))
             newData = newData.join(data, on='Date', how='outer')
             self.market_arr = newData[['Date', 'Close']]
         self.market_arr = self.market_arr.fill_null(-1.0)
@@ -277,6 +290,7 @@ class Engine():
     def setup_run(self):
         if self.arr != []:
             cols = set()
+            self.MRC_prices=np.zeros(len(self.arr))
             for i in range(0, len(self.arr)):
                 cols.update(self.arr[i].columns)
                 
@@ -364,8 +378,7 @@ class Engine():
         print("Run time: " + str(self.runtime_end-self.runtime_start)+"s")
 
 
-    # Plot history of portfolio value, summing assets and capital with
-    # get_portfolio_cash_value
+    # Plot history of portfolio value, summing assets and capital 
     def plot_strategies(self, names='all', orders=False, order_threshold=0.1, suffix = '') -> None:
         """ 
         Generate a plot for the performance of a single strategy, or specified 
@@ -480,12 +493,10 @@ class Engine():
             id=idx
             date, data = self.data_at_idx(idx)
             price = data.select([pl.col('Close')])[i].item()
-            while(price < 0 and id >= idx - 10 and id >= 0):
-                date, data = self.data_at_idx(id)
-                price = data.select([pl.col('Close')])[i].item()
-                id -= 1
             if price < 0:
-                price = 0
+                price = self.MRC_prices[i]
+            else:
+                self.MRC_prices[i] = price
             asset_values += price*self.portfolio_allocations[strategy_num][i]
         return round(asset_values, 2)
 
@@ -583,8 +594,23 @@ class Engine():
             if(os.path.exists(path)):
                 os.remove(path)
         
+    # string to datetime
+    # TODO (II) add support for UNIX ts and other date formats
+    # Valid intervals: [1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo]
+    def str_to_dt(self, s: str) -> dt.datetime:
+        date = dateutil.parser.parse(s, ignoretz=True)
+
+        if self.date_interval[0].lower() == 'h':
+                return date.replace(second=0, microsecond=0, minute=0, hour=date.minute//30+ date.hour) 
+            
+        return date
+
+
+
+    
     def __del__(self):
         self.clear_data()
+    
 
 class InsufficientFundsException(Exception):
     def __init__(self, message='Insufficient Funds to perform transaction.'):
@@ -598,8 +624,5 @@ def list_to_str(lst):
         out += str(lst[i]) + ', '
     return out + str(lst[len(lst)-1])+']'
 
-# string to datetime
-# TODO (II) add support for UNIX ts and other date formats
-def str_to_dt(s: str) -> dt.datetime:
-    return dateutil.parser.parse(s, ignoretz=True)
+
 
