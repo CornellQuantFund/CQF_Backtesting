@@ -134,16 +134,18 @@ class Engine():
 
 
     # Tested and works for Example Kaggle competition
+    #converted to Polars
     def addCrypto(path, interval):
         df = pd.read_csv(path)
         # Convert the timestamp column to a pandas datetime format I couldn't find polars way ATM so left as pandas
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
-        
         # Group by the specified time interval
-        df_grouped = df.groupby(pd.Grouper(key='Timestamp', freq=f'{interval}s')).sum()
+        df_grouped = df.groupby(pd.Grouper(key='Timestamp', freq=f'{interval}s')
+            ).agg({'Open':'mean','High':'mean','Low':'mean','Close':'mean','Volume_(BTC)':'sum',
+             'Volume_(Currency)':'sum','Weighted_Price':'mean'}).reset_index()
         
-        return df_grouped
-
+        return pl.from_pandas(df_grouped)
+    
     # TODO: (II) Takes in path to csv data and adds it to the data folder,
     # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
     def add_data(self, path):
