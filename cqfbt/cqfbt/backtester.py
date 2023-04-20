@@ -569,6 +569,32 @@ class Engine():
         return max_drawdowns
 
 
+    def get_beta(self) -> list[float]:
+        return [1] * len(self.strategies) # TODO Group 2
+
+
+    def get_treynor_ratio(self) -> list[float]:
+        RISK_FREE_RATE = .0504 # We use the 3-month treasury bill rate as of 4/18/23 as a proxy for the risk-free ratio
+
+        treynor_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_history = self.portfolio_history[i]
+            portfolio_value = np.add(portfolio_history[:, len(self.portfolio_assets)], portfolio_history[:, len(self.portfolio_assets) + 1])
+            strategy_returns = np.divide(np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            avg_return = np.mean(strategy_returns)
+            beta = self.get_beta()[i]
+            treynor_ratio.append((avg_return - RISK_FREE_RATE) / beta)
+        return treynor_ratio
+
+
+    def get_jensens_alpha(self) -> list[float]:
+        pass
+
+
+    def get_capture_ratio(self) -> list[float]:
+        pass
+
+
     # Clears all data files in data folder
     def clear_data(self):
         """
