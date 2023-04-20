@@ -5,3 +5,5 @@ cqfbt/data/*
 !cqfbt/data/.githold
 **/*.log
 backtesting_log.log
+**/*.pdf
+**/market_benchmark_internal_hist.csv
