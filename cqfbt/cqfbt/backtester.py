@@ -117,7 +117,7 @@ class Engine():
             if ticker == 'SPX' or ticker == 'DJI' or  ticker =='NDAQ':
                 self.market = (ticker, i)
                 print(ticker)
-            self.add_data("cqfbt\\data\\"+f"{ticker}_hist.csv")
+            self.add_data("cqfbt/data/"+f"{ticker}_hist.csv")
         
         self.init_time_end = time.time()
         print("Initialization time: " + str(self.init_time_end-self.init_time_start)+"s")
@@ -129,8 +129,8 @@ class Engine():
     # Saves csv files in data folder
     def get_info_on_stocks(self, start, end, ptfl):
         for i in range(0, len(ptfl)):
-            if(~os.path.isfile("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")):
-                yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")
+            if(~os.path.isfile("cqfbt/data/" + f"{ptfl[i]}_hist.csv")):
+                yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt/data/" + f"{ptfl[i]}_hist.csv")
 
 
     # Tested and works for Example Kaggle competition
@@ -159,7 +159,7 @@ class Engine():
         """
         self.setup_required = True
         print("adding " + path)
-        path_context = path.split('\\')
+        path_context = path.split('/')
         self.portfolio_assets.append(path_context[len(path_context)-1].split('.')[0])
         data = pl.read_csv(path)
         
@@ -286,8 +286,8 @@ class Engine():
 
         if self.market_arr.is_empty():
             newData = pl.DataFrame({'Date':timestamp_range})
-            yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
-            data = pl.read_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
+            yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt/data/" + "market_benchmark_internal_hist.csv")
+            data = pl.read_csv("cqfbt/data/" + "market_benchmark_internal_hist.csv")
             try:
                 data = data.rename({'Datetime': 'Date'})
             except:
@@ -628,7 +628,7 @@ class Engine():
         """
         if (assetNo >= 0):
             file = self.portfolio_assets[assetNo]
-            path = "cqfbt\\data\\" + f"{file}.csv"
+            path = "cqfbt/data/" + f"{file}.csv"
             if(os.path.exists(path)):
                 os.remove(path)
         

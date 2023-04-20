@@ -1,7 +1,7 @@
-cqfbt\dist
+cqfbt/dist
 **/__pycache__/
 cqfbt/**/__pycache__/
-cqfbt\data\*
-!cqfbt\data\.githold
+cqfbt/data/*
+!cqfbt/data/.githold
 **/*.log
 backtesting_log.log
