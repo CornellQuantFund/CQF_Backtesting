@@ -104,6 +104,7 @@ if __name__ == "__main__":
     print("Sharpe: " + str(eng.get_sharpe_ratio()))
     print("Info ratio: " + str(eng.get_info_ratio()))
     print("Max Draw: " + str(eng.get_max_drawdown()))
+    print(f"Treynor ratio: {eng.get_treynor_ratio()}")
 
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")
