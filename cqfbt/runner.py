@@ -14,7 +14,7 @@ if __name__ == "__main__":
             open = data.get_column('Open').to_numpy()
             close = data.get_column('Close').to_numpy()
 
-            if(~(open.any() < 0)):
+            if (~(open.any() < 0)):
                 pct_change = (close-open)/open
 
                 buy_indices = []
@@ -26,7 +26,8 @@ if __name__ == "__main__":
                         quantity = capital / (close[i])*pct_change[i]
                         buy_indices.append(i)
                         if (i >= len(portfolio_allocations)-2):  # If this is Bitcoin / Eth
-                            buy_quantities.append(quantity) # do not round to nearest int
+                            # do not round to nearest int
+                            buy_quantities.append(quantity)
                         else:
                             buy_quantities.append(round(quantity))
                     elif pct_change[i] < -0.01:
@@ -35,24 +36,26 @@ if __name__ == "__main__":
                         if (portfolio_allocations[i] <= -0.5*quantity):
                             sell_quantities.append(portfolio_allocations[i])
                         elif (i >= len(portfolio_allocations)-2):  # If this is Bitcoin / Eth
-                            sell_quantities.append(-0.5*quantity) # again, do not round
+                            # again, do not round
+                            sell_quantities.append(-0.5*quantity)
                         else:
                             sell_quantities.append(round(-0.5*quantity))
 
-                if(~error):
+                if (~error):
                     for i in range(len(buy_indices)):
-                        newOrders.append(backtester.Order(True, buy_indices[i], buy_quantities[i]))
+                        newOrders.append(backtester.Order(
+                            True, buy_indices[i], buy_quantities[i]))
                 for i in range(len(sell_indices)):
-                    newOrders.append(backtester.Order(False, sell_indices[i], sell_quantities[i]))
+                    newOrders.append(backtester.Order(
+                        False, sell_indices[i], sell_quantities[i]))
             return newOrders
-        
 
     class Strat1(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
-            newOrders =[]
+            newOrders = []
             open = data.get_column('Open').to_numpy()
             close = data.get_column('Close').to_numpy()
-            if(~(open.any() < 0)):
+            if (~(open.any() < 0)):
                 pct_change = (close-open)/open
 
                 buy_indices = []
@@ -64,32 +67,39 @@ if __name__ == "__main__":
                         quantity = 2*capital / (close[i])*pct_change[i]
                         buy_indices.append(i)
                         if (i >= len(portfolio_allocations)-2):  # If this is Bitcoin / Eth
-                            buy_quantities.append(quantity) # do not round to nearest int
+                            # do not round to nearest int
+                            buy_quantities.append(quantity)
                         else:
                             buy_quantities.append(round(quantity))
                     elif pct_change[i] < -0.03:
                         sell_indices.append(i)
                         sell_quantities.append(portfolio_allocations[i])
-                if(~error):
+                if (~error):
                     for i in range(len(buy_indices)):
-                        newOrders.append(backtester.Order(True, buy_indices[i], buy_quantities[i]))
+                        newOrders.append(backtester.Order(
+                            True, buy_indices[i], buy_quantities[i]))
                 for i in range(len(sell_indices)):
-                    newOrders.append(backtester.Order(False, sell_indices[i], sell_quantities[i]))
+                    newOrders.append(backtester.Order(
+                        False, sell_indices[i], sell_quantities[i]))
             return newOrders
 
     s0 = Strat0('Momentum Trader')
-    s1= Strat1('Nervous Momentum Trader')
+    s1 = Strat1('Nervous Momentum Trader')
 
     start = '2022-01-01'
     end = '2023-01-01'
     intvl = '1h'
-    yf.Ticker("NFLX").history(start=start, end=end, interval=intvl).to_csv("netflix.csv")
-    yf.Ticker("AMZN").history(start=start, end=end, interval=intvl).to_csv("amazon.csv")
-    yf.Ticker("BTC-USD").history(start=start, end=end, interval=intvl).to_csv("bitcoin.csv")
-    yf.Ticker("ETH-USD").history(start=start, end=end, interval=intvl).to_csv("ethereum.csv")
-    
-    eng = backtester.Engine(start, end, intvl, 
-        ['SPY', 'TSLA', 'AAPL', 'JPM'])
+    yf.Ticker("NFLX").history(start=start, end=end,
+                              interval=intvl).to_csv("netflix.csv")
+    yf.Ticker("AMZN").history(start=start, end=end,
+                              interval=intvl).to_csv("amazon.csv")
+    yf.Ticker("BTC-USD").history(start=start, end=end,
+                                 interval=intvl).to_csv("bitcoin.csv")
+    yf.Ticker("ETH-USD").history(start=start, end=end,
+                                 interval=intvl).to_csv("ethereum.csv")
+
+    eng = backtester.Engine(start, end, intvl,
+                            ['SPY', 'TSLA', 'AAPL', 'JPM'])
     eng.add_data('netflix.csv')
     eng.add_data('amazon.csv')
     eng.add_data('bitcoin.csv')
@@ -98,8 +108,8 @@ if __name__ == "__main__":
     eng.add_strategy(s0, 1000000)
     eng.add_strategy(s1, 1000000)
     eng.run()
-    eng.plot_strategies(orders = True, order_threshold = .2, suffix='run1')
-    eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
+    eng.plot_strategies(orders=True, order_threshold=.2, suffix='run1')
+    eng.plot_aggregate(title='All Strategies', mkt_ref=True)
 
     print("Sharpe: " + str(eng.get_sharpe_ratio()))
     print("Info ratio: " + str(eng.get_info_ratio()))
