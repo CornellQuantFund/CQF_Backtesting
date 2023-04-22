@@ -10,13 +10,11 @@ import os
 if __name__ == "__main__":
     class Strat0(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
-            newOrders = []
+            newOrders = orders
             open = data.get_column('Open').to_numpy()
             close = data.get_column('Close').to_numpy()
-
             if(~(open.any() < 0)):
                 pct_change = (close-open)/open
-
                 buy_indices = []
                 buy_quantities = []
                 sell_indices = []
@@ -44,12 +42,13 @@ if __name__ == "__main__":
                         newOrders.append(backtester.Order(True, buy_indices[i], buy_quantities[i]))
                 for i in range(len(sell_indices)):
                     newOrders.append(backtester.Order(False, sell_indices[i], sell_quantities[i]))
+            
             return newOrders
         
 
     class Strat1(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
-            newOrders =[]
+            newOrders = orders
             open = data.get_column('Open').to_numpy()
             close = data.get_column('Close').to_numpy()
             if(~(open.any() < 0)):
@@ -80,9 +79,9 @@ if __name__ == "__main__":
     s0 = Strat0('Momentum Trader')
     s1= Strat1('Nervous Momentum Trader')
 
-    start = '2022-01-01'
-    end = '2023-01-01'
-    intvl = '1h'
+    start = '2020-01-01'
+    end = '2023-04-01'
+    intvl = '1d'
     yf.Ticker("NFLX").history(start=start, end=end, interval=intvl).to_csv("netflix.csv")
     yf.Ticker("AMZN").history(start=start, end=end, interval=intvl).to_csv("amazon.csv")
     yf.Ticker("BTC-USD").history(start=start, end=end, interval=intvl).to_csv("bitcoin.csv")
@@ -95,15 +94,12 @@ if __name__ == "__main__":
     eng.add_data('bitcoin.csv')
     eng.add_data('ethereum.csv')
 
-    eng.add_strategy(s0, 1000000)
-    eng.add_strategy(s1, 1000000)
+    eng.add_strategy(s0, 100000)
+    eng.add_strategy(s1, 100000)
+    eng.set_transaction_costs([0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.003, 0.0025])
     eng.run()
     eng.plot_strategies(orders = True, order_threshold = .2, suffix='run1')
     eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
-
-    print("Sharpe: " + str(eng.get_sharpe_ratio()))
-    print("Info ratio: " + str(eng.get_info_ratio()))
-    print("Max Draw: " + str(eng.get_max_drawdown()))
 
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")

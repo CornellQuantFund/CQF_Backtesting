@@ -10,6 +10,8 @@ import numpy as np
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.ticker import MaxNLocator
 from math import *
 import logging
 
@@ -49,7 +51,19 @@ class Order():
         self.quantity = quantity
 
     def __repr__(self):
-        return "asset index is " + str(self.asset) + " this is a buy: " + str(self.buyT_sellF) + " for quantity " + str(self.quantity)
+        out = ''
+        if self.buyT_sellF:
+            out = out + 'Buy '
+        else:
+            out = out + 'Sell '
+        out = out + str(self.quantity) + ' Asset ' + str(self.asset)
+
+        return out
+
+
+
+
+
 
 
 class Engine():
@@ -62,6 +76,7 @@ class Engine():
     strategy_capital = [] # List of initial capital values for each strategy
     capital = [] # List of capital values for each strategy
     MRC_prices = [] # List of most recent close prices for eachh asset in portfolio
+    transaction_costs = []
 
     orders = [] # List of lists, each containing the orders each strategy is hoping to execute
     arr = [] # List of data frames, one for each asset
@@ -106,11 +121,13 @@ class Engine():
         self.interval = interval
         num = "".join([char for char in self.interval if char.isnumeric()])
         intvl = "".join([char for char in self.interval if char.isalpha()])
+        if intvl.lower() == 'wk':
+            intvl = 'w'
         self.date_interval = (intvl, num)
         self.get_info_on_stocks(start_date, end_date, ptfl)
         logging.basicConfig(filename='backtesting_log.log', filemode='w', format='%(levelname)s - %(message)s',
                             level=logging.INFO)
-        self.dates = pl.date_range(low=self.str_to_dt(start_date), high=self.str_to_dt(end_date), interval=str.lower(interval))
+        self.dates = pl.date_range(low=self.str_to_dt(start_date), high=self.str_to_dt(end_date), interval=str(num)+str.lower(intvl))
         for i in range(0, len(ptfl)):
             ticker = ptfl[i]
             if ticker == 'SPX' or ticker == 'DJI' or  ticker =='NDAQ':
@@ -158,7 +175,7 @@ class Engine():
             
         data.replace('Date', data.get_column('Date').apply(self.str_to_dt))
 
-        timestamp_range = pl.date_range(low=data['Date'][0], high=data['Date'][data.shape[0]-1], interval=str.lower(self.interval)) 
+        timestamp_range = pl.date_range(low=data['Date'][0], high=data['Date'][data.shape[0]-1], interval=str(self.date_interval[1])+str.lower(self.date_interval[0])) 
         newData = pl.DataFrame({'Date':timestamp_range})        
         newData = newData.join(data, on='Date', how='outer')
         newData = newData.fill_null(-1.0)
@@ -209,11 +226,10 @@ class Engine():
         outstanding_orders = self.orders
         capital_delta = np.zeros(len(self.strategies))
         portfolio_delta = np.zeros((len(self.strategies), len(self.portfolio_assets)))
-        logging.info("Bought X shares of Y, Sold A shares of B, etc")
+        date, data = self.data_at_idx(idx)
+        logging.info("::: " + str(date) + " :::")
         for i in range(len(self.strategies)):
             executed_orders = []
-            id = idx
-            date, data = self.data_at_idx(id)
             for order in outstanding_orders[i]:
                 if(order.buyT_sellF):
                     price = data.select([pl.col('Close')])[order.asset].item()
@@ -223,6 +239,9 @@ class Engine():
                     else:
                         self.MRC_prices[order.asset] = price
                     capital_delta[i] -= order.quantity * price
+                    capital_delta[i] -= order.quantity * price * self.transaction_costs[order.asset]
+                    logging.info(self.strategies[i].name + " Bought " + str(order.quantity) +
+                                 " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
 
                 elif(~order.buyT_sellF):
                     portfolio_delta[i, order.asset] -= order.quantity
@@ -231,7 +250,10 @@ class Engine():
                         price = self.MRC_prices[order.asset]
                     else:
                         self.MRC_prices[order.asset] = price
-                    capital_delta[i] += order.quantity * price
+                    capital_delta[i] += order.quantity * price 
+                    capital_delta[i] -= order.quantity * price * self.transaction_costs[order.asset]
+                    logging.info(self.strategies[i].name + " Sold " + str(order.quantity) +
+                                 " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
                 executed_orders.append(order)
 
             if self.capital[i]+capital_delta[i] < 0:
@@ -261,7 +283,7 @@ class Engine():
     def reformat_arr(self):
         timestamp_range = pl.date_range(low=self.dates[0], \
                 high=self.dates[-1], \
-                    interval=str.lower(self.interval)).to_list()
+                    interval=str(self.date_interval[1])+str.lower(self.date_interval[0])).to_list()
         
         for j in range(0, len(self.arr)):
             if(self.arr[j].shape[0] != len(timestamp_range)):
@@ -360,23 +382,46 @@ class Engine():
                 self.orders[j] = self.strategies[j].execute(
                     date, data, self.portfolio_allocations[j], self.capital[j], self.orders[j], error, self.portfolio_assets)
                 error = False
-                try:
-                    delta_p, delta_c = self.execute_orders(
-                        data, i)
-                    self.update_portfolio(delta_p, delta_c)
-                    num_errors = 0
-                except InsufficientFundsException: 
-                    i -= 1
-                    num_errors += 1
-                    error = True
-                    if (num_errors >= 2):
-                        print("Strategy " + str(j) + ':')
-                        raise InsufficientFundsException()
-                    else: continue
+            try:
+                delta_p, delta_c = self.execute_orders(
+                    data, i)
+                self.update_portfolio(delta_p, delta_c)
+                num_errors = 0
+            except InsufficientFundsException: 
+                i -= 1
+                num_errors += 1
+                error = True
+                if (num_errors >= 2):
+                    print("Strategy " + str(j) + ':')
+                    raise InsufficientFundsException()
+                else: continue
         self.setup_required = False
         self.runtime_end = time.time()
         print("Run time: " + str(self.runtime_end-self.runtime_start)+"s")
+        self.print_metrics()
+        self.performance_plot()
 
+    def print_metrics(self):
+        print("\n ****** Performance Metrics ******")
+        print("Sharpe Ratio:     " + str(self.get_sharpe_ratio()))
+        print("Info Ratio:       " + str(self.get_info_ratio()))
+        print("Max Drawdown:     " + str(self.get_max_drawdown()))
+        print("Sortino Ratio:    " + str(self.get_sortino_ratio()))
+        print("Calmar Ratio:     " + str(self.get_calmar_ratio()))
+        print("Upside Potential: " + str(self.get_upside_potential_ratio()))
+
+        ## Group 3 todo
+    def set_transaction_costs(self, transaction_costs):
+        ## if its a float
+        if isinstance(transaction_costs, float):
+            self.transaction_costs = [transaction_costs] * len(self.portfolio_assets)
+        ## if its a float list
+        elif isinstance(transaction_costs, list):
+            ## make sure the list is the same length
+            assert len(transaction_costs) == len(self.portfolio_assets), 'Length of transaction_costs must match the number of assets'
+            self.transaction_costs = transaction_costs
+        else:
+            raise TypeError('Transaction costs must be of type float or list of floats')
 
     # Plot history of portfolio value, summing assets and capital 
     def plot_strategies(self, names='all', orders=False, order_threshold=0.1, suffix = '') -> None:
@@ -481,8 +526,120 @@ class Engine():
         ax.set_xlabel("Date")
         ax.set_ylabel("Value")
             
-        ax.legend()
+        ax.legend(loc='upper right')
         fig.savefig(title + ".pdf")
+
+    def performance_plot(self):
+        dates = self.dates
+        sns.set_theme()
+        font = {'family' : 'Times New Roman',
+                        'weight' : 'bold',
+                        'size'   : '18'}
+        
+        for j in range(len(self.strategies)):
+            cmap = plt.hsv
+            fig = plt.figure(figsize=(12, 10))
+            grid = plt.GridSpec(4, 2, hspace=1, wspace=0.5)
+            performance = fig.add_subplot(grid[:2, 1:])
+            values = np.add(self.portfolio_history[j][:, len(
+                self.portfolio_assets)+1], self.portfolio_history[j][:, len(self.portfolio_assets)])
+            performance.xaxis.set_major_locator(MaxNLocator(integer=True, prune='both', nbins=9))
+            performance.plot(dates, values)
+            performance.set_title(self.strategies[j].name, font=font)
+            performance.set_xlabel("Date")
+            performance.set_ylabel("Value")
+
+            allocs = self.portfolio_history[j][:, :len(self.portfolio_allocations[j])]
+            alloc_sums = np.sum(allocs, axis = 0)/ len(self.data_arr) + 1
+
+            alloc_values = allocs
+            alloc_value_sums = np.zeros_like(alloc_values[:, 0])
+
+            scatter_plot = fig.add_subplot(grid[:2, :1])
+            alloc_plot = fig.add_subplot(grid[2:, :])
+            for i in range(len(self.arr)):
+                end_idx = len(self.data_arr)-1
+                end_date, data = self.data_at_idx(end_idx)
+                end_price = data.select([pl.col('Close')])[i].item()
+                while end_price <= 0:
+                    end_idx -= 1
+                    end_date, data = self.data_at_idx(end_idx)
+                    end_price = data.select([pl.col('Close')])[i].item()
+                start_idx = 0
+                start_date, data = self.data_at_idx(start_idx)
+                start_price = data.select([pl.col('Close')])[i].item()
+                while start_price <= 0:
+                    start_idx += 1
+                    start_date, data = self.data_at_idx(start_idx)
+                    start_price = data.select([pl.col('Close')])[i].item()
+                    
+                for k in range(len(alloc_values)):
+                    idx = k
+                    date, data = self.data_at_idx(idx)
+                    price = data.select([pl.col('Close')])[i].item()
+                    while price <=0 and idx > 0:
+                        idx -= 1
+                        date, data = self.data_at_idx(idx)
+                        price = data.select([pl.col('Close')])[i].item()
+                    alloc_values[k, i] *= price
+
+                years = (end_date-start_date).total_seconds() / 31536000
+
+                yearly_returns = ((end_price - start_price) / start_price) ** (1/years) * 100
+
+                time_diff_days = (self.dates[1] - self.dates[0]).total_seconds()*len(self.dates) / 86400
+
+                nonzero_vals = []
+                nonzero_dates = []
+                sum = 0
+                num_nonzero_vals = 0
+                for k in range(len(self.arr[i])):
+                    val = self.arr[i].select([pl.col('Close')])[k].item()
+                    if val > 0:
+                        nonzero_vals.append(val)
+                        sum += val
+                        nonzero_dates.append(self.dates[k])
+                        num_nonzero_vals += 1
+                mean_price = sum / num_nonzero_vals
+
+                nonzero_vals = pl.Series(nonzero_vals)
+                volatility = nonzero_vals.pct_change().std() * (time_diff_days ** 0.5) * 100
+                
+                hsv = cm.get_cmap('hsv')
+                scatter_plot.scatter(volatility.real, yearly_returns.real, marker='o', s=mean_price*alloc_sums[i]/max(alloc_sums), color=hsv(i/len(self.portfolio_assets)), alpha=0.6)
+                scatter_plot.text(volatility.real, yearly_returns.real, self.portfolio_assets[i], ha='center', va='bottom', fontsize= 8)
+                scatter_plot.set_title("Annualized % Returns vs. Volatility")
+                scatter_plot.set_xlabel("Annualized Volatility (%)")
+                scatter_plot.set_ylabel("Annualized Returns (%)")
+
+                new_dates = self.dates
+                group_avg = alloc_values[:, i, 0]
+                group_avg_sum = alloc_value_sums[:, 0]
+
+                if(len(self.dates) > 400):
+                    num_vals_per_bar = len(self.dates)//400
+                    num_values_to_pad = num_vals_per_bar - len(alloc_values[:, i, 0]) % num_vals_per_bar
+
+                    padded_alloc_vals = np.pad(alloc_values[:, i, 0], (0, num_values_to_pad), mode='constant')
+                    padded_alloc_value_sums = np.pad(alloc_value_sums[:, 0], (0, num_values_to_pad), mode='constant')
+
+                    groups = padded_alloc_vals.reshape(-1, num_vals_per_bar)
+                    group_sums = padded_alloc_value_sums.reshape(-1, num_vals_per_bar)
+
+                    group_avg = np.sum(groups, axis=1) / num_vals_per_bar
+                    group_avg_sum = np.sum(group_sums, axis=1) / num_vals_per_bar
+                    new_dates = []
+                    for k in range(0, len(self.dates), num_vals_per_bar):
+                            new_dates.append(self.dates[k])
+
+                alloc_plot.bar(new_dates[:], group_avg[:], 1, bottom=group_avg_sum[:], align='center', label = self.portfolio_assets[i], color=hsv(i/len(self.portfolio_assets)), edgecolor='black', linewidth = 0.1)
+                alloc_value_sums = np.add(alloc_value_sums, alloc_values[:, i])
+                alloc_plot.set_ylabel("Value in Asset")
+                alloc_plot.set_xlabel("Date")
+            #alloc_plot.set_ylim([0, self.strategy_capital[j]])
+            alloc_plot.legend(loc='upper left')
+        plt.show()
+
 
     # Uses data (self.arr) to price the cash value of a portfolio by summing close prices
     # for each asset in the portfolio, capital should be included. There may be
@@ -557,6 +714,80 @@ class Engine():
         return max_drawdowns
 
 
+    def get_sortino_ratio(self):
+        mkt_close = self.market_arr['Close'].to_numpy()
+        mkt_close = mkt_close[mkt_close > 0]
+        mkt_returns = np.diff(mkt_close) / mkt_close[:-1]
+        mkt_avg_annual_return = np.mean(mkt_returns) * 252
+
+        # get portfolio values
+        sortino_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(
+                self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            strategy_returns = np.divide(
+                np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            downside_dev = 0
+            num_neg_returns = 0
+            for ret in strategy_returns:
+                if ret - np.mean(mkt_returns) < 0:
+                    downside_dev += (ret - np.mean(mkt_returns))**2
+                    num_neg_returns += 1
+            downside_dev /= num_neg_returns
+            avg_annual_return = np.mean(strategy_returns) * 252
+            sortino_ratio.append(
+                (avg_annual_return - mkt_avg_annual_return)/downside_dev)
+
+        return sortino_ratio
+
+    def get_calmar_ratio(self):
+        mkt_close = self.market_arr['Close'].to_numpy()
+        mkt_close = mkt_close[mkt_close > 0]
+        mkt_returns = np.diff(mkt_close) / mkt_close[:-1]
+        mkt_avg_annual_return = np.mean(mkt_returns) * 252
+
+        calmar_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(
+                self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            strategy_returns = np.divide(
+                np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            avg_annual_return = np.mean(strategy_returns) * 252
+            calmar_ratio.append(
+                (avg_annual_return - mkt_avg_annual_return)/self.get_max_drawdown()[i])
+
+        return calmar_ratio
+
+    def get_upside_potential_ratio(self, mar=-1):
+        # if mar = -1, use risk-free-rate/market return
+        mkt_close = self.market_arr['Close'].to_numpy()
+        mkt_close = mkt_close[mkt_close > 0]
+        mkt_returns = np.diff(mkt_close) / mkt_close[:-1]
+        mkt_avg_annual_return = np.mean(mkt_returns) * 252
+        if (mar == -1):
+            mar = mkt_avg_annual_return
+        upside_potential_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_value = np.add(self.portfolio_history[i][:, len(
+                self.portfolio_assets)], self.portfolio_history[i][:, len(self.portfolio_assets)+1])
+            strategy_returns = np.divide(
+                np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            upside = 0
+            downside_dev = 0
+            num_neg_returns = 0
+            for ret in strategy_returns:
+                if ret - np.mean(mkt_returns) < 0:
+                    downside_dev += (ret - mar)**2
+                    num_neg_returns += 1
+                else:
+                    upside += (ret - mar)
+            downside_dev /= num_neg_returns
+            upside /= (252 - num_neg_returns)
+            upside_potential_ratio.append(
+                upside/downside_dev)
+
+        return upside_potential_ratio
+
     # Clears all data files in data folder
     def clear_data(self):
         """
@@ -566,14 +797,14 @@ class Engine():
         self.data_arr = []
         self.dates = []
         for i in range(0, len(self.portfolio_assets)):
-            self.remove_data(self.portfolio_assets[i], i)
+            self.remove_data(self.portfolio_assets[i])
         self.remove_data('market_benchmark_internal_hist')
 
     # Removes a specific data file from data folder
     # Can specify a ticker, or if it is user-added data, the index
     # of the asset in the portfolio
     # TODO: (II) remove user-added data files by name
-    def remove_data(self, data='', assetNo=-1):
+    def remove_data(self, data=''):
         """ 
         Remove a specified data file from the engine.
     
@@ -588,11 +819,9 @@ class Engine():
                 the order in which they were added to the engine, with tickers
                 passed in the constructor given priority.
         """
-        if (assetNo >= 0):
-            file = self.portfolio_assets[assetNo]
-            path = "cqfbt\\data\\" + f"{file}.csv"
-            if(os.path.exists(path)):
-                os.remove(path)
+        path = "cqfbt\\data\\" + f"{data}.csv"
+        if(os.path.exists(path)):
+            os.remove(path)
         
     # string to datetime
     # TODO (II) add support for UNIX ts and other date formats
