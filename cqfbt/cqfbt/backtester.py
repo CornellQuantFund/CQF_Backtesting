@@ -7,6 +7,7 @@ import os
 import dateutil.parser
 import datetime as dt
 import numpy as np
+import pandas as pd
 import polars as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -133,7 +134,7 @@ class Engine():
             if ticker == 'SPX' or ticker == 'DJI' or  ticker =='NDAQ':
                 self.market = (ticker, i)
                 print(ticker)
-            self.add_data("cqfbt\\data\\"+f"{ticker}_hist.csv")
+            self.add_data("cqfbt/data/"+f"{ticker}_hist.csv")
         
         self.init_time_end = time.time()
         print("Initialization time: " + str(self.init_time_end-self.init_time_start)+"s")
@@ -145,12 +146,23 @@ class Engine():
     # Saves csv files in data folder
     def get_info_on_stocks(self, start, end, ptfl):
         for i in range(0, len(ptfl)):
-            if(~os.path.isfile("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")):
-                yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt\\data\\" + f"{ptfl[i]}_hist.csv")
+            if(~os.path.isfile("cqfbt/data/" + f"{ptfl[i]}_hist.csv")):
+                yf.Ticker(ptfl[i]).history(start=start, end=end, interval=self.interval).to_csv("cqfbt/data/" + f"{ptfl[i]}_hist.csv")
 
 
-
-
+    # Tested and works for Example Kaggle competition
+    #converted to Polars
+    def addCrypto(path, interval):
+        df = pd.read_csv(path)
+        # Convert the timestamp column to a pandas datetime format I couldn't find polars way ATM so left as pandas
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
+        # Group by the specified time interval
+        df_grouped = df.groupby(pd.Grouper(key='Timestamp', freq=f'{interval}s')
+            ).agg({'Open':'mean','High':'mean','Low':'mean','Close':'mean','Volume_(BTC)':'sum',
+             'Volume_(Currency)':'sum','Weighted_Price':'mean'}).reset_index()
+        
+        return pl.from_pandas(df_grouped)
+    
     # TODO: (II) Takes in path to csv data and adds it to the data folder,
     # edits / reformats engine.arr, engine.portfolio_assets and engine.dates
     def add_data(self, path):
@@ -164,7 +176,7 @@ class Engine():
         """
         self.setup_required = True
         print("adding " + path)
-        path_context = path.split('\\')
+        path_context = path.split('/')
         self.portfolio_assets.append(path_context[len(path_context)-1].split('.')[0])
         data = pl.read_csv(path)
         
@@ -296,8 +308,8 @@ class Engine():
 
         if self.market_arr.is_empty():
             newData = pl.DataFrame({'Date':timestamp_range})
-            yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
-            data = pl.read_csv("cqfbt\\data\\" + "market_benchmark_internal_hist.csv")
+            yf.Ticker(self.market[0]).history(start=self.dates[0], end=self.dates[-1], interval=self.interval).to_csv("cqfbt/data/" + "market_benchmark_internal_hist.csv")
+            data = pl.read_csv("cqfbt/data/" + "market_benchmark_internal_hist.csv")
             try:
                 data = data.rename({'Datetime': 'Date'})
             except:
@@ -787,6 +799,31 @@ class Engine():
                 upside/downside_dev)
 
         return upside_potential_ratio
+    def get_beta(self) -> list[float]:
+        return [1] * len(self.strategies) # TODO Group 2
+
+
+    def get_treynor_ratio(self) -> list[float]:
+        RISK_FREE_RATE = .0504 # We use the 3-month treasury bill rate as of 4/18/23 as a proxy for the risk-free ratio
+
+        treynor_ratio = []
+        for i in range(len(self.strategies)):
+            portfolio_history = self.portfolio_history[i]
+            portfolio_value = np.add(portfolio_history[:, len(self.portfolio_assets)], portfolio_history[:, len(self.portfolio_assets) + 1])
+            strategy_returns = np.divide(np.diff(portfolio_value, axis=0), portfolio_value[:-1])
+            avg_return = np.mean(strategy_returns)
+            beta = self.get_beta()[i]
+            treynor_ratio.append((avg_return - RISK_FREE_RATE) / beta)
+        return treynor_ratio
+
+
+    def get_jensens_alpha(self) -> list[float]:
+        pass
+
+
+    def get_capture_ratio(self) -> list[float]:
+        pass
+
 
     # Clears all data files in data folder
     def clear_data(self):
