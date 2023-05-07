@@ -156,6 +156,16 @@ class Engine():
     # converted to Polars
 
     def addCrypto(path, interval):
+        """
+        Creates a Polars Dataframe for reading over a CryptoCSV
+
+        Parameters
+        ----------
+        path : str
+            The Path to the CSV
+        interval : int
+            The specified grouping interval for bundling the Crypto CSV
+        """
         df = pd.read_csv(path)
         # Convert the timestamp column to a pandas datetime format I couldn't find polars way ATM so left as pandas
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')

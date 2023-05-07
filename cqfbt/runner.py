@@ -10,6 +10,27 @@ import os
 if __name__ == "__main__":
     class Strat0(strategy.Strategy):
         def execute(self, date, data, portfolio_allocations, capital, orders, error, tickers):
+            """
+            Executes All Strategies on a given date given the data, current portfolio allocation, capital,
+            inflight orders, errors, and tickers
+
+            Parameters
+            ----------
+            date : str
+                The date we are executing our strategy on.
+            data : Polars Dataframe
+               The dataframe that we execute our strategy on
+            porfolio_allocations : int[]
+                The Current assets that are available to tade and their current allocation in the portfolio
+            capital: int
+                The amount of capital to spend
+            orders: Order[]
+                An array of limit orders that still haven't been executed
+            error: boolean
+                If there is an error
+            tickers: str[]
+                List of tickers we can execute our strategy on.
+            """
             newOrders = orders
             open = data.get_column('Open').to_numpy()
             close = data.get_column('Close').to_numpy()
