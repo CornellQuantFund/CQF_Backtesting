@@ -880,6 +880,9 @@ class Engine():
         pass
 
     def get_value_at_risk(self) -> list[float]:
+        """
+        Retrieves the value at risk.
+        """
         # We calculate the VaR using the variance covariance method
         VaRs = []
         for i in range(len(self.strategies)):
@@ -904,6 +907,9 @@ class Engine():
         return VaRs
 
     def get_conditional_value_at_risk(self) -> list[float]:
+        """
+        Retrives the Conditional Value at Risk
+        """
         cvars = []
         VaRs = self.get_value_at_risk()
         for i in range(len(self.strategies)):
@@ -918,6 +924,9 @@ class Engine():
         return cvars
 
     def get_burke_ratio(self) -> list[float]:
+        """
+        Retrives the Burke ratio from the class
+        """
         # We use the 3-month treasury bill rate as of 4/28/23 as a proxy for the risk-free ratio
         RISK_FREE_RATE = .0504
 
@@ -934,7 +943,11 @@ class Engine():
             burkes.append(burke_ratio)
         return burkes
 
+
     def get_m2_ratio(self) -> list[float]:
+        """
+        Retrives the M2 ratio from the class
+        """
         # We set benchmark to MSCI 3 year annualized STD DEV
         benchmark = 0.1862
 
