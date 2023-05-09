@@ -5,6 +5,17 @@ import pandas as pd
 # Abstract class for user defined strategy.
 
 
+"""
+The Strategy Class used within the Execution class. Virtual Class 
+
+Parameters
+----------
+name: str
+    Creates the Name of the strategy class
+
+Virtual Method:
+Abstract Method:
+"""
 class Strategy(metaclass=abc.ABCMeta):
     data_history = []
     # list of dataframes, each entry is the data at specified date date
