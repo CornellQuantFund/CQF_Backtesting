@@ -733,6 +733,9 @@ class Engine():
         return round(asset_values, 2)
 
     def get_sharpe_ratio(self):
+        """
+        Retrieves sharpe ratio from the class
+        """
         # get SPY values
         mkt_close = self.market_arr['Close'].to_numpy()
         mkt_close = mkt_close[mkt_close > 0]
@@ -756,6 +759,9 @@ class Engine():
         return sharpe_ratio
 
     def get_info_ratio(self, benchmark=''):
+        """
+        Retrieves information ratio from the class
+        """
         if benchmark == '':
             benchmark = self.market[0]
 
@@ -783,6 +789,9 @@ class Engine():
         return info_ratio
 
     def get_max_drawdown(self):
+        """
+        Retrieves max drawdown from the class
+        """
         max_drawdowns = []
         for i in range(len(self.strategies)):
             portfolio_value = np.add(self.portfolio_history[i][:, len(
