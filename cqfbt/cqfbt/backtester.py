@@ -245,10 +245,22 @@ class Engine():
             self.portfolio_allocations[i] = np.add(
                 self.portfolio_allocations[i], portfolio_delta[i])
 
-    #   Executes orders at prices found in the data, and returns change in
-    #   portfolio and capital as a result. Returns any orders which did not execute
-    #   yet due to the limit price.
+
     def execute_orders(self, data, idx):
+        """ 
+        Executes orders at prices found in the data, and returns change in
+        portfolio and capital as a result. Returns any orders which did not execute
+        yet due to the limit price.
+
+        Raises: InsufficientFundsException if not enough capital to execute
+
+        Parameters
+        ------------
+            data: pl.DataFrame
+                Price data to execute orders at
+            idx: int
+                Index of price data to use
+        """
         # For now, just use one of the open or close values as the 'true price'
         # at which orders are executed
         outstanding_orders = self.orders
