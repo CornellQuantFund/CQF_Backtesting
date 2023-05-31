@@ -119,8 +119,8 @@ if __name__ == "__main__":
     eng.add_strategy(s1, 100000)
     eng.set_transaction_costs([0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.003, 0.0025])
     eng.run()
-    eng.plot_strategies(orders = True, order_threshold = .2, suffix='run1')
-    eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
+    # eng.plot_strategies(orders = True, order_threshold = .2, suffix='run1')
+    # eng.plot_aggregate(title = 'All Strategies', mkt_ref = True)
 
     os.remove("bitcoin.csv")
     os.remove("ethereum.csv")

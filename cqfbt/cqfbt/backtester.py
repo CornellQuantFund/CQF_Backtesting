@@ -59,7 +59,8 @@ class Order():
         else:
             out = out + 'Sell '
         out = out + str(self.quantity) + ' Asset ' + str(self.asset)
-
+        if self.limit > 0:
+            out = out + ' Lim: ' + str(self.limit)
         return out
 
 
@@ -128,7 +129,7 @@ class Engine():
             intvl = 'w'
         self.date_interval = (intvl, num)
         self.get_info_on_stocks(start_date, end_date, ptfl)
-        logging.basicConfig(filename='backtesting_log.log', filemode='w', format='%(levelname)s - %(message)s',
+        logging.basicConfig(filename='backtest.log', filemode='w', format='%(levelname)s - %(message)s',
                             level=logging.INFO)
         self.dates = pl.date_range(low=self.str_to_dt(start_date), high=self.str_to_dt(
             end_date), interval=str(num)+str.lower(intvl))
@@ -279,11 +280,13 @@ class Engine():
                         price = self.MRC_prices[order.asset]
                     else:
                         self.MRC_prices[order.asset] = price
-                    capital_delta[i] -= order.quantity * price
-                    capital_delta[i] -= order.quantity * \
-                        price * self.transaction_costs[order.asset]
-                    logging.info(self.strategies[i].name + " Bought " + str(order.quantity) +
-                                 " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
+                    if order.limit < 0 or price < order.limit:
+                        capital_delta[i] -= order.quantity * price
+                        capital_delta[i] -= order.quantity * \
+                            price * self.transaction_costs[order.asset]
+                        logging.info(self.strategies[i].name + " Bought " + str(order.quantity) +
+                                    " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
+                        executed_orders.append(order)
 
                 elif(~order.buyT_sellF):
                     portfolio_delta[i, order.asset] -= order.quantity
@@ -292,12 +295,13 @@ class Engine():
                         price = self.MRC_prices[order.asset]
                     else:
                         self.MRC_prices[order.asset] = price
-                    capital_delta[i] += order.quantity * price
-                    capital_delta[i] -= order.quantity * \
-                        price * self.transaction_costs[order.asset]
-                    logging.info(self.strategies[i].name + " Sold " + str(order.quantity) +
-                                 " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
-                executed_orders.append(order)
+                    if order.limit < price:
+                        capital_delta[i] += order.quantity * price
+                        capital_delta[i] -= order.quantity * \
+                            price * self.transaction_costs[order.asset]
+                        logging.info(self.strategies[i].name + " Sold " + str(order.quantity) +
+                                    " shares of " + self.portfolio_assets[order.asset] + " at " + str(price))
+                        executed_orders.append(order)
 
             if self.capital[i]+capital_delta[i] < 0:
                 message = "Transaction attempted with insufficient funds: strategy " + str(i) + ":" + \
@@ -455,9 +459,9 @@ class Engine():
         print("Sharpe Ratio:     " + str(self.get_sharpe_ratio()))
         print("Info Ratio:       " + str(self.get_info_ratio()))
         print("Max Drawdown:     " + str(self.get_max_drawdown()))
-        print("Sortino Ratio:    " + str(self.get_sortino_ratio()))
+        # print("Sortino Ratio:    " + str(self.get_sortino_ratio()))
         print("Calmar Ratio:     " + str(self.get_calmar_ratio()))
-        print("Upside Potential: " + str(self.get_upside_potential_ratio()))
+        # print("Upside Potential: " + str(self.get_upside_potential_ratio()))
 
         # Group 3 todo
     def set_transaction_costs(self, transaction_costs):
