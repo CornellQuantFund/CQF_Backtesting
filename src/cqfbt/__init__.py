@@ -1,5 +1,1 @@
-__version__ = '0.1.0'
-
-
-def hello():
-    print("Hello! You look nice today")
+__version__ = '1.0.0'

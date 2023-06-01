@@ -1,4 +1,4 @@
-# CQF Backtester 0.0.2
+# CQF Backtester 1.0.0
 
 import time
 import yfinance as yf
